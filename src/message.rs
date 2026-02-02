@@ -1,6 +1,6 @@
 //! Message Format & Deterministic ID
 //!
-//! **Deep Fried Optimizations**:
+//! **Optimizations**:
 //! - BLAKE3 for fast, deterministic message ID
 //! - Zero-copy serialization where possible
 //! - Compact wire format

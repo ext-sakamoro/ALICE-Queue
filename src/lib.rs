@@ -1,4 +1,4 @@
-//! # ALICE-Queue (Deep Fried Edition)
+//! # ALICE-Queue (Optimized Edition)
 //!
 //! **Deterministic Zero-Copy Message Log**
 //!
@@ -68,7 +68,7 @@ pub use ring::{BatchConsumer, PaddedAtomicU64, RingBuffer, RingSlot};
 pub use journal::{Journal, JournalIter};
 
 /// Version
-pub const VERSION: &str = "0.1.0-deepfried";
+pub const VERSION: &str = "0.1.0-optimized";
 
 /// Queue combining ring buffer with idempotency barrier
 pub struct AliceQueue<const N: usize> {

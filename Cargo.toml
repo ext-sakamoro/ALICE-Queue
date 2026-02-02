@@ -3,7 +3,7 @@ name = "alice-queue"
 version = "0.1.0"
 edition = "2021"
 authors = ["Moroya Sakamoto"]
-description = "Deterministic Zero-Copy Message Log - Deep Fried Edition"
+description = "Deterministic Zero-Copy Message Log - Optimized Edition"
 license = "AGPL-3.0"
 repository = "https://github.com/ext-sakamoro/ALICE-Queue"
 

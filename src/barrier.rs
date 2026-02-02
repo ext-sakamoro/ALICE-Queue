@@ -1,6 +1,6 @@
 //! Idempotency Barrier (Exactly-Once Processing)
 //!
-//! **Deep Fried Optimizations**:
+//! **Optimizations**:
 //! - Per-sender sequence tracking (O(1) lookup)
 //! - Gap detection for NACK requests
 //! - Zero allocation on hot path

@@ -1,6 +1,6 @@
 //! Lock-Free Ring Buffer (Disruptor Style)
 //!
-//! **Deep Fried Optimizations**:
+//! **Optimizations**:
 //! - Cache-line padding (64 bytes) to prevent False Sharing
 //! - Single Producer, Multiple Consumer (SPMC) or MPMC modes
 //! - No locks, pure atomic operations

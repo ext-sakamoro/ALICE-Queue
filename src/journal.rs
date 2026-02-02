@@ -1,6 +1,6 @@
 //! Memory-Mapped Append-Only Log (WAL)
 //!
-//! **Deep Fried Optimizations**:
+//! **Optimizations**:
 //! - `mmap` for zero-copy I/O (no read/write syscalls)
 //! - Append-only for crash safety
 //! - OS page cache exploitation

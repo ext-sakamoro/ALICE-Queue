@@ -1,6 +1,6 @@
 //! Vector Clock for Causal Ordering
 //!
-//! **Deep Fried Optimizations**:
+//! **Optimizations**:
 //! - Fixed-size inline array (no heap allocation)
 //! - Compact serialization
 //! - O(N) merge where N = number of nodes

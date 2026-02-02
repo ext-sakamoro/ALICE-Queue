@@ -1,4 +1,4 @@
-# ALICE-Queue "Deep Fried"
+# ALICE-Queue "Optimized"
 
 **Deterministic Zero-Copy Message Log**
 
@@ -44,7 +44,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Deep Fried Optimizations
+## Optimizations
 
 ### 1. Lock-Free Ring Buffer (Disruptor Style)
 - **Cache-Line Padding**: Head and Tail cursors are 64 bytes apart to prevent false sharing
