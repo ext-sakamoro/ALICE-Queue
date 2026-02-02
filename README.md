@@ -238,8 +238,11 @@ fn from_bytes(bytes: &[u8]) -> Option<Self>;
 
 ## License
 
-**GNU AGPLv3**
+**GNU AGPLv3** (Affero General Public License v3.0)
+
+Commercial licensing is available for enterprise use cases.
+**For commercial inquiries, please contact: https://extoria.co.jp/en**
 
 ## Author
 
-Moroya Sakamoto
+**[Moroya Sakamoto](https://extoria.co.jp/en)**
