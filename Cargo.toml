@@ -23,3 +23,9 @@ strip = true
 memmap2 = "0.9"
 blake3 = "1.5"
 alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = false
