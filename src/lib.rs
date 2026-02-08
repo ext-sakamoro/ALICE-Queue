@@ -58,6 +58,9 @@ pub mod journal;
 pub mod message;
 pub mod ring;
 
+#[cfg(feature = "crypto")]
+pub mod crypto_bridge;
+
 // Re-exports
 pub use barrier::{BatchBarrier, GapResult, IdempotencyBarrier, SenderId, SeqNum};
 pub use clock::{HybridClock, VectorClock, MAX_NODES};
