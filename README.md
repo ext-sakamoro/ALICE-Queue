@@ -220,6 +220,33 @@ fn to_bytes(&self) -> Vec<u8>;
 fn from_bytes(bytes: &[u8]) -> Option<Self>;
 ```
 
+## ALICE-Analytics Integration (Data Pipeline)
+
+ALICE-Queue serves as the ingestion layer for the ALICE Data Pipeline. Enable the `queue` feature in ALICE-Analytics to consume queue messages as streaming metrics.
+
+```
+Sensor/App ──► ALICE-Queue (SPSC + WAL)
+                     ↓  17-byte metric payload
+              ALICE-Analytics (HLL++, DDSketch)
+                     ↓
+              ALICE-DB (Model-Based LSM-Tree)
+```
+
+```rust
+use alice_analytics::{QueueConsumerPipeline, encode_metric_payload, MetricEvent, FnvHasher};
+use alice_queue::Message;
+
+let mut consumer = QueueConsumerPipeline::<128, 512, 1024>::new(0.05);
+
+// Encode metric → 17-byte payload → queue message
+let hash = FnvHasher::hash_bytes(b"sensor.temperature");
+let payload = encode_metric_payload(&MetricEvent::gauge(hash, 22.5));
+consumer.queue.enqueue(Message::new([0u8; 32], 1, payload.to_vec())).unwrap();
+
+// Drain queue into analytics pipeline
+consumer.drain();
+```
+
 ## Performance
 
 ### Ring Buffer (SPSC)
