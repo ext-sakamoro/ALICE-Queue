@@ -11,6 +11,7 @@ repository = "https://github.com/ext-sakamoro/ALICE-Queue"
 default = ["std"]
 std = []
 crypto = ["dep:alice-crypto", "std"]  # ALICE-Crypto message encryption
+text = ["dep:alice-text", "std"]  # ALICE-Text compressed log payloads
 
 [profile.release]
 opt-level = 3
@@ -23,6 +24,7 @@ strip = true
 memmap2 = "0.9"
 blake3 = "1.5"
 alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
+alice-text = { path = "../ALICE-Text", optional = true, default-features = false }
 
 [profile.bench]
 opt-level = 3
