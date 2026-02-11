@@ -220,6 +220,24 @@ fn to_bytes(&self) -> Vec<u8>;
 fn from_bytes(bytes: &[u8]) -> Option<Self>;
 ```
 
+## Cross-Crate Bridges
+
+### ALICE-Crypto Bridge (feature: `crypto`)
+
+End-to-end message encryption for queue payloads.
+
+Enable: `alice-queue = { features = ["crypto"] }`
+
+### ALICE-Text Bridge (feature: `text`)
+
+Compressed log payload batching via ALICE-Text exception-based compression.
+
+- `TextPayload` — Compressed payload with original length tracking
+- `TextLogPipeline` — Batched log compression pipeline
+- `encode_text_payload()` / `decode_text_payload()` — Compress/decompress log entries
+
+Enable: `alice-queue = { features = ["text"] }`
+
 ## ALICE-Analytics Integration (Data Pipeline)
 
 ALICE-Queue serves as the ingestion layer for the ALICE Data Pipeline. Enable the `queue` feature in ALICE-Analytics to consume queue messages as streaming metrics.
