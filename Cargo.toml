@@ -6,6 +6,7 @@ authors = ["Moroya Sakamoto"]
 description = "Deterministic Zero-Copy Message Log - Optimized Edition"
 license = "AGPL-3.0"
 repository = "https://github.com/ext-sakamoro/ALICE-Queue"
+publish = false
 
 [features]
 default = ["std"]
