@@ -109,9 +109,16 @@ impl<T, const N: usize> RingBuffer<T, N> {
         assert!(N.is_power_of_two(), "Ring size must be power of 2");
         assert!(N >= 2, "Ring size must be at least 2");
 
-        // Initialize slots with sequence numbers
+        // Initialize slots with sequence numbers.
+        // The Vec is constructed with exactly N elements, so converting the
+        // boxed slice to a `Box<[RingSlot<T>; N]>` is guaranteed to succeed.
+        // We use `expect` here instead of a silent `unwrap` so that any future
+        // mismatch (e.g. a const-generic change) produces an actionable message.
         let slots: Vec<RingSlot<T>> = (0..N).map(|i| RingSlot::empty(i as u64)).collect();
-        let slots: Box<[RingSlot<T>; N]> = slots.into_boxed_slice().try_into().ok().unwrap();
+        let slots: Box<[RingSlot<T>; N]> = slots
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| panic!("RingBuffer: slot Vec length must equal const N"));
 
         Self {
             head: PaddedAtomicU64::new(0),

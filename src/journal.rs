@@ -147,9 +147,21 @@ impl Journal {
             ));
         }
 
-        // Read positions
-        let write_pos = u64::from_le_bytes(mmap[8..16].try_into().unwrap());
-        let entry_count = u64::from_le_bytes(mmap[16..24].try_into().unwrap());
+        // Read positions.
+        // The bounds check above guarantees at least JOURNAL_HEADER_SIZE bytes,
+        // so these fixed-width slices always have the expected length.
+        // We use map_err+? instead of unwrap so any unexpected truncation
+        // propagates as an io::Error rather than a panic.
+        let write_pos = u64::from_le_bytes(
+            mmap[8..16]
+                .try_into()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt write_pos field"))?,
+        );
+        let entry_count = u64::from_le_bytes(
+            mmap[16..24]
+                .try_into()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry_count field"))?,
+        );
 
         Ok((write_pos, entry_count))
     }
@@ -214,8 +226,15 @@ impl Journal {
             ));
         }
 
-        // Read length
-        let len = u32::from_le_bytes(self.mmap[offset..offset + 4].try_into().unwrap()) as usize;
+        // Read length.
+        // The bounds check above ensures `offset + HEADER_SIZE` fits inside the
+        // mmap, so the slice is always 4 bytes wide. We propagate failure as an
+        // io::Error rather than panicking.
+        let len = u32::from_le_bytes(
+            self.mmap[offset..offset + 4]
+                .try_into()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry length field"))?,
+        ) as usize;
 
         if len == 0 {
             return Err(io::Error::new(
@@ -224,9 +243,12 @@ impl Journal {
             ));
         }
 
-        // Read checksum
-        let stored_checksum =
-            u32::from_le_bytes(self.mmap[offset + 4..offset + 8].try_into().unwrap());
+        // Read checksum.
+        let stored_checksum = u32::from_le_bytes(
+            self.mmap[offset + 4..offset + 8]
+                .try_into()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry checksum field"))?,
+        );
 
         // Read data
         let data_start = offset + HEADER_SIZE;

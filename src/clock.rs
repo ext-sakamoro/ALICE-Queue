@@ -250,21 +250,32 @@ impl HybridClock {
         bytes
     }
 
-    /// Deserialize from bytes
+    /// Deserialize from bytes.
+    ///
+    /// The argument is a fixed-size `[u8; 14]` reference, so every sub-slice
+    /// has a statically-known length; we index directly to avoid any runtime
+    /// failure path that `try_into().unwrap()` would introduce.
     pub fn from_bytes(bytes: &[u8; 14]) -> Self {
         Self {
-            physical: u64::from_le_bytes(bytes[0..8].try_into().unwrap()),
-            logical: u32::from_le_bytes(bytes[8..12].try_into().unwrap()),
-            node_id: u16::from_le_bytes(bytes[12..14].try_into().unwrap()),
+            physical: u64::from_le_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3],
+                bytes[4], bytes[5], bytes[6], bytes[7],
+            ]),
+            logical: u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]),
+            node_id: u16::from_le_bytes([bytes[12], bytes[13]]),
         }
     }
 
     #[cfg(feature = "std")]
     fn current_millis() -> u64 {
         use std::time::{SystemTime, UNIX_EPOCH};
+        // `duration_since` returns Err only if the system clock is set before
+        // the Unix epoch — a misconfigured host. Fall back to 0 rather than
+        // panicking, which lets the logical counter continue to provide
+        // monotonicity.
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as u64
     }
 

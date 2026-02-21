@@ -101,13 +101,18 @@ impl<const N: usize> AliceQueue<N> {
 
     /// Dequeue and process with idempotency check
     ///
-    /// Returns `Some((message, GapResult))` if a message was available
+    /// Returns `Ok(Some((message, GapResult)))` if a message was available,
+    /// `Ok(None)` if the queue is empty, or `Err` if the message header is
+    /// malformed (e.g. sender key too short to derive a `SenderId`).
     #[inline]
-    pub fn dequeue(&mut self) -> Option<(Message, GapResult)> {
-        let msg = self.ring.try_pop()?;
-        let sender_id = Self::sender_to_id(&msg.header.sender);
+    pub fn dequeue(&mut self) -> Result<Option<(Message, GapResult)>, &'static str> {
+        let msg = match self.ring.try_pop() {
+            Some(m) => m,
+            None => return Ok(None),
+        };
+        let sender_id = Self::sender_to_id(&msg.header.sender)?;
         let result = self.barrier.check_and_mark(sender_id, msg.header.seq);
-        Some((msg, result))
+        Ok(Some((msg, result)))
     }
 
     /// Peek without removing (checks next message)
@@ -118,9 +123,17 @@ impl<const N: usize> AliceQueue<N> {
     }
 
     /// Convert sender key to ID (first 8 bytes as u64)
+    ///
+    /// Returns an error if the sender key is shorter than 8 bytes.
+    /// In practice `SenderKey` is always `[u8; 32]`, so this never fails
+    /// for well-formed keys; the `Result` protects callers from future
+    /// type changes and avoids a panic on the hot dequeue path.
     #[inline]
-    fn sender_to_id(sender: &SenderKey) -> SenderId {
-        u64::from_le_bytes(sender[0..8].try_into().unwrap())
+    fn sender_to_id(sender: &SenderKey) -> Result<SenderId, &'static str> {
+        sender[0..8]
+            .try_into()
+            .map(u64::from_le_bytes)
+            .map_err(|_| "sender key too short to derive SenderId")
     }
 
     /// Queue length
@@ -165,11 +178,11 @@ mod tests {
         assert_eq!(queue.len(), 2);
 
         // Dequeue with idempotency
-        let (msg, result) = queue.dequeue().unwrap();
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
         assert_eq!(result, GapResult::Accept);
         assert_eq!(msg.payload, b"first");
 
-        let (msg, result) = queue.dequeue().unwrap();
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
         assert_eq!(result, GapResult::Accept);
         assert_eq!(msg.payload, b"second");
 
@@ -188,10 +201,10 @@ mod tests {
         queue.enqueue(msg1).unwrap();
         queue.enqueue(msg2).unwrap();
 
-        let (_, result1) = queue.dequeue().unwrap();
+        let (_, result1) = queue.dequeue().unwrap().unwrap();
         assert_eq!(result1, GapResult::Accept);
 
-        let (_, result2) = queue.dequeue().unwrap();
+        let (_, result2) = queue.dequeue().unwrap().unwrap();
         assert_eq!(result2, GapResult::Duplicate);
     }
 
@@ -207,10 +220,10 @@ mod tests {
         queue.enqueue(msg1).unwrap();
         queue.enqueue(msg3).unwrap();
 
-        let (_, result1) = queue.dequeue().unwrap();
+        let (_, result1) = queue.dequeue().unwrap().unwrap();
         assert_eq!(result1, GapResult::Accept);
 
-        let (_, result3) = queue.dequeue().unwrap();
+        let (_, result3) = queue.dequeue().unwrap().unwrap();
         assert!(matches!(result3, GapResult::Gap { missing_start: 2, missing_end: 3 }));
     }
 
