@@ -251,7 +251,11 @@ impl MessageBuilder {
                 seq: self.seq,
                 payload_len: self.payload.len() as u32,
                 flags: self.flags,
-                vclock_size: self.vclock.as_ref().map(|vc| vc.serialized_size() as u8).unwrap_or(0),
+                vclock_size: self
+                    .vclock
+                    .as_ref()
+                    .map(|vc| vc.serialized_size() as u8)
+                    .unwrap_or(0),
                 _reserved: 0,
             },
             vclock: self.vclock,
@@ -348,5 +352,169 @@ mod tests {
     fn test_header_size() {
         // Ensure header is packed correctly
         assert_eq!(MessageHeader::SIZE, 80);
+    }
+
+    #[test]
+    fn test_message_empty_payload() {
+        let sender = test_sender();
+        let msg = Message::new(sender, 1, Vec::new());
+
+        assert!(msg.verify_id());
+        assert_eq!(msg.payload.len(), 0);
+        assert_eq!(msg.header.payload_len, 0);
+        assert_eq!(msg.serialized_size(), MessageHeader::SIZE);
+
+        // Roundtrip
+        let bytes = msg.to_bytes();
+        let msg2 = Message::from_bytes(&bytes).unwrap();
+        assert_eq!(msg2.payload.len(), 0);
+        assert!(msg2.verify_id());
+    }
+
+    #[test]
+    fn test_message_large_payload() {
+        let sender = test_sender();
+        let payload = vec![0xAB; 65536];
+        let msg = Message::new(sender, 99, payload.clone());
+
+        assert!(msg.verify_id());
+        assert_eq!(msg.header.payload_len, 65536);
+        assert_eq!(msg.payload, payload);
+
+        let bytes = msg.to_bytes();
+        let msg2 = Message::from_bytes(&bytes).unwrap();
+        assert_eq!(msg2.payload, payload);
+        assert!(msg2.verify_id());
+    }
+
+    #[test]
+    fn test_from_bytes_too_short() {
+        // Empty
+        assert!(Message::from_bytes(&[]).is_none());
+        // Shorter than header
+        assert!(Message::from_bytes(&[0u8; 79]).is_none());
+        // Exactly header size but payload_len says more data
+        let sender = test_sender();
+        let msg = Message::new(sender, 1, b"data".to_vec());
+        let bytes = msg.to_bytes();
+        // Truncate the payload
+        let truncated = &bytes[..MessageHeader::SIZE + 1];
+        assert!(Message::from_bytes(truncated).is_none());
+    }
+
+    #[test]
+    fn test_different_sender_produces_different_id() {
+        let mut sender1 = [0u8; 32];
+        sender1[0] = 1;
+        let mut sender2 = [0u8; 32];
+        sender2[0] = 2;
+
+        let msg1 = Message::new(sender1, 1, b"same".to_vec());
+        let msg2 = Message::new(sender2, 1, b"same".to_vec());
+        assert_ne!(msg1.header.id, msg2.header.id);
+    }
+
+    #[test]
+    fn test_serialization_preserves_all_fields() {
+        let sender = test_sender();
+        let mut vclock = VectorClock::new(1, 4);
+        vclock.tick();
+        vclock.tick();
+
+        let msg = Message::with_vclock(sender, 42, b"payload".to_vec(), vclock);
+
+        let bytes = msg.to_bytes();
+        let msg2 = Message::from_bytes(&bytes).unwrap();
+
+        assert_eq!(msg.header.id, msg2.header.id);
+        assert_eq!(msg.header.sender, msg2.header.sender);
+        assert_eq!(msg.header.seq, msg2.header.seq);
+        assert_eq!(msg.header.payload_len, msg2.header.payload_len);
+        assert_eq!(msg.header.flags, msg2.header.flags);
+        assert_eq!(msg.header.vclock_size, msg2.header.vclock_size);
+        assert_eq!(msg.payload, msg2.payload);
+        assert!(msg2.vclock.is_some());
+        let vc2 = msg2.vclock.unwrap();
+        assert_eq!(vc2.local_time(), 2);
+    }
+
+    #[test]
+    fn test_builder_no_payload() {
+        let sender = test_sender();
+        let msg = MessageBuilder::new(sender, 10).build();
+
+        assert_eq!(msg.header.seq, 10);
+        assert_eq!(msg.payload.len(), 0);
+        assert_eq!(msg.header.payload_len, 0);
+        assert_eq!(msg.header.flags, flags::NONE);
+        assert!(msg.vclock.is_none());
+        assert!(msg.verify_id());
+    }
+
+    #[test]
+    fn test_builder_flags_combination() {
+        let sender = test_sender();
+        let vclock = VectorClock::new(0, 2);
+        let msg = MessageBuilder::new(sender, 1)
+            .payload(b"data".to_vec())
+            .vclock(vclock)
+            .requires_ack()
+            .build();
+
+        // Should have both HAS_VCLOCK and REQUIRES_ACK
+        assert_ne!(msg.header.flags & flags::HAS_VCLOCK, 0);
+        assert_ne!(msg.header.flags & flags::REQUIRES_ACK, 0);
+        // Should NOT have COMPRESSED or ENCRYPTED
+        assert_eq!(msg.header.flags & flags::COMPRESSED, 0);
+        assert_eq!(msg.header.flags & flags::ENCRYPTED, 0);
+    }
+
+    #[test]
+    fn test_compute_id_is_blake3() {
+        let sender = test_sender();
+        let seq: u64 = 7;
+        let payload = b"test data";
+
+        let id = Message::compute_id(&sender, seq, payload);
+
+        // Manually compute BLAKE3 the same way
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&sender);
+        hasher.update(&seq.to_le_bytes());
+        hasher.update(payload);
+        let expected = *hasher.finalize().as_bytes();
+
+        assert_eq!(id, expected);
+    }
+
+    #[test]
+    fn test_verify_id_detects_tampering() {
+        let sender = test_sender();
+        let mut msg = Message::new(sender, 1, b"original".to_vec());
+        assert!(msg.verify_id());
+
+        // Tamper with payload
+        msg.payload = b"tampered".to_vec();
+        assert!(!msg.verify_id());
+    }
+
+    #[test]
+    fn test_message_serialized_size() {
+        let sender = test_sender();
+
+        // Without vclock
+        let msg1 = Message::new(sender, 1, b"hello".to_vec());
+        assert_eq!(msg1.serialized_size(), MessageHeader::SIZE + 5);
+        assert_eq!(msg1.to_bytes().len(), msg1.serialized_size());
+
+        // With vclock (3 nodes)
+        let vclock = VectorClock::new(0, 3);
+        let msg2 = Message::with_vclock(sender, 1, b"hello".to_vec(), vclock);
+        let expected_vc_size = vclock.serialized_size();
+        assert_eq!(
+            msg2.serialized_size(),
+            MessageHeader::SIZE + expected_vc_size + 5
+        );
+        assert_eq!(msg2.to_bytes().len(), msg2.serialized_size());
     }
 }

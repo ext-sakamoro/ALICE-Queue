@@ -84,6 +84,7 @@ impl Journal {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(path)?;
 
         // Pre-allocate file
@@ -140,7 +141,7 @@ impl Journal {
         }
 
         // Verify magic
-        if &mmap[0..4] != &MAGIC {
+        if mmap[0..4] != MAGIC {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Invalid journal magic",
@@ -152,16 +153,13 @@ impl Journal {
         // so these fixed-width slices always have the expected length.
         // We use map_err+? instead of unwrap so any unexpected truncation
         // propagates as an io::Error rather than a panic.
-        let write_pos = u64::from_le_bytes(
-            mmap[8..16]
-                .try_into()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt write_pos field"))?,
-        );
-        let entry_count = u64::from_le_bytes(
-            mmap[16..24]
-                .try_into()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry_count field"))?,
-        );
+        let write_pos =
+            u64::from_le_bytes(mmap[8..16].try_into().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "corrupt write_pos field")
+            })?);
+        let entry_count = u64::from_le_bytes(mmap[16..24].try_into().map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "corrupt entry_count field")
+        })?);
 
         Ok((write_pos, entry_count))
     }
@@ -184,10 +182,7 @@ impl Journal {
 
         // Check capacity
         if write_pos + entry_size as u64 > self.capacity {
-            return Err(io::Error::new(
-                io::ErrorKind::WriteZero,
-                "Journal full",
-            ));
+            return Err(io::Error::new(io::ErrorKind::WriteZero, "Journal full"));
         }
 
         let offset = write_pos as usize;
@@ -204,7 +199,8 @@ impl Journal {
         self.mmap[offset + 8..offset + 8 + data.len()].copy_from_slice(data);
 
         // Update positions
-        self.write_pos.store(write_pos + entry_size as u64, Ordering::Release);
+        self.write_pos
+            .store(write_pos + entry_size as u64, Ordering::Release);
         self.entry_count.fetch_add(1, Ordering::Relaxed);
 
         // Update header
@@ -230,11 +226,9 @@ impl Journal {
         // The bounds check above ensures `offset + HEADER_SIZE` fits inside the
         // mmap, so the slice is always 4 bytes wide. We propagate failure as an
         // io::Error rather than panicking.
-        let len = u32::from_le_bytes(
-            self.mmap[offset..offset + 4]
-                .try_into()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry length field"))?,
-        ) as usize;
+        let len = u32::from_le_bytes(self.mmap[offset..offset + 4].try_into().map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "corrupt entry length field")
+        })?) as usize;
 
         if len == 0 {
             return Err(io::Error::new(
@@ -244,11 +238,10 @@ impl Journal {
         }
 
         // Read checksum.
-        let stored_checksum = u32::from_le_bytes(
-            self.mmap[offset + 4..offset + 8]
-                .try_into()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "corrupt entry checksum field"))?,
-        );
+        let stored_checksum =
+            u32::from_le_bytes(self.mmap[offset + 4..offset + 8].try_into().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "corrupt entry checksum field")
+            })?);
 
         // Read data
         let data_start = offset + HEADER_SIZE;
@@ -460,5 +453,147 @@ mod tests {
 
         // Different data should produce different checksum
         assert_ne!(crc32(b"hello worlds"), checksum);
+    }
+
+    #[test]
+    fn test_journal_full() {
+        let path = temp_path("full");
+        let _ = fs::remove_file(&path);
+
+        {
+            // Very small capacity: header (64 bytes) + minimal room
+            let mut journal = Journal::open(&path, 128).unwrap();
+
+            // Fill it up until we get an error
+            let mut count = 0;
+            loop {
+                match journal.append(b"data") {
+                    Ok(_) => count += 1,
+                    Err(e) => {
+                        assert_eq!(e.kind(), io::ErrorKind::WriteZero);
+                        break;
+                    }
+                }
+                if count > 100 {
+                    panic!("Journal should have been full by now");
+                }
+            }
+            assert!(count > 0);
+        }
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_journal_read_at_invalid_offset() {
+        let path = temp_path("invalid_offset");
+        let _ = fs::remove_file(&path);
+
+        {
+            let journal = Journal::open(&path, 1024).unwrap();
+
+            // Read at offset past end
+            let result = journal.read_at(2000);
+            assert!(result.is_err());
+
+            // Read at start of header area (offset 0) - will get zero-length entry
+            let result = journal.read_at(JOURNAL_HEADER_SIZE as u64);
+            assert!(result.is_err()); // Empty entry since nothing written
+        }
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_journal_available_space() {
+        let path = temp_path("available");
+        let _ = fs::remove_file(&path);
+
+        {
+            let mut journal = Journal::open(&path, 4096).unwrap();
+            let initial_available = journal.available();
+            assert!(initial_available > 0);
+            assert_eq!(journal.capacity(), 4096);
+
+            journal.append(b"some data here").unwrap();
+            assert!(journal.available() < initial_available);
+            assert_eq!(journal.capacity(), 4096);
+        }
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_journal_write_position_advances() {
+        let path = temp_path("write_pos");
+        let _ = fs::remove_file(&path);
+
+        {
+            let mut journal = Journal::open(&path, 4096).unwrap();
+            let pos0 = journal.write_position();
+
+            journal.append(b"entry1").unwrap();
+            let pos1 = journal.write_position();
+            assert!(pos1 > pos0);
+
+            journal.append(b"entry2").unwrap();
+            let pos2 = journal.write_position();
+            assert!(pos2 > pos1);
+
+            // Entry size = HEADER_SIZE(8) + data.len
+            let expected_advance = (HEADER_SIZE + 6) as u64; // "entry1" = 6 bytes
+            assert_eq!(pos1 - pos0, expected_advance);
+        }
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_crc32_empty_data() {
+        let empty_checksum = crc32(b"");
+        // CRC32 of empty data should be deterministic
+        assert_eq!(crc32(b""), empty_checksum);
+        // Should differ from non-empty
+        assert_ne!(crc32(b"a"), empty_checksum);
+    }
+
+    #[test]
+    fn test_crc32_known_value() {
+        // CRC32 of "hello world" with polynomial 0xEDB88320 (reflected)
+        // This is the standard CRC-32 (ISO 3309)
+        let checksum = crc32(b"hello world");
+        // The standard CRC-32 value for "hello world" is 0x0D4A1185
+        assert_eq!(checksum, 0x0D4A1185);
+    }
+
+    #[test]
+    fn test_journal_multiple_entries_iter_order() {
+        let path = temp_path("iter_order");
+        let _ = fs::remove_file(&path);
+
+        {
+            let mut journal = Journal::open(&path, 1024 * 1024).unwrap();
+
+            for i in 0..20 {
+                journal
+                    .append(format!("entry_{:03}", i).as_bytes())
+                    .unwrap();
+            }
+
+            assert_eq!(journal.entry_count(), 20);
+
+            let entries: Vec<Vec<u8>> = journal
+                .iter()
+                .map(|r| r.map(|(_, data)| data))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+
+            assert_eq!(entries.len(), 20);
+            for (i, entry) in entries.iter().enumerate() {
+                assert_eq!(entry, format!("entry_{:03}", i).as_bytes());
+            }
+        }
+
+        let _ = fs::remove_file(&path);
     }
 }

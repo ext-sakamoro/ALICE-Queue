@@ -15,7 +15,7 @@ pub const MAX_NODES: usize = 16;
 /// Vector Clock for causal ordering
 ///
 /// Each node maintains a counter. The vector represents "what this node knows".
-/// If VC[i] = 5, it means this node has seen 5 events from node i.
+/// If `VC[i] = 5`, it means this node has seen 5 events from node `i`.
 #[derive(Clone, Copy, Debug)]
 pub struct VectorClock {
     /// Clock values for each node
@@ -60,7 +60,7 @@ impl VectorClock {
 
     /// Merge with another clock (on receive)
     ///
-    /// VC_merged[i] = max(VC_self[i], VC_other[i])
+    /// `VC_merged[i] = max(VC_self[i], VC_other[i])`
     #[inline]
     pub fn merge(&mut self, other: &VectorClock) {
         for i in 0..self.num_nodes as usize {
@@ -149,9 +149,9 @@ impl VectorClock {
         }
 
         let mut clocks = [0u64; MAX_NODES];
-        for i in 0..num_nodes as usize {
+        for (i, clock) in clocks.iter_mut().enumerate().take(num_nodes as usize) {
             let offset = 2 + i * 8;
-            clocks[i] = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+            *clock = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
         }
 
         Some(Self {
@@ -258,8 +258,7 @@ impl HybridClock {
     pub fn from_bytes(bytes: &[u8; 14]) -> Self {
         Self {
             physical: u64::from_le_bytes([
-                bytes[0], bytes[1], bytes[2], bytes[3],
-                bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
             ]),
             logical: u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]),
             node_id: u16::from_le_bytes([bytes[12], bytes[13]]),
@@ -370,6 +369,128 @@ mod tests {
     #[test]
     fn test_hlc_serialization() {
         let hlc = HybridClock::now(42);
+        let bytes = hlc.to_bytes();
+        let hlc2 = HybridClock::from_bytes(&bytes);
+        assert_eq!(hlc, hlc2);
+    }
+
+    #[test]
+    fn test_vector_clock_default() {
+        let vc = VectorClock::default();
+        assert_eq!(vc.local_time(), 0);
+        assert_eq!(vc.time_for(0), 0);
+    }
+
+    #[test]
+    fn test_vector_clock_merge_updates_both() {
+        let mut vc1 = VectorClock::new(0, 3);
+        let mut vc2 = VectorClock::new(1, 3);
+
+        vc1.tick(); // vc1 = [1, 0, 0]
+        vc1.tick(); // vc1 = [2, 0, 0]
+        vc2.tick(); // vc2 = [0, 1, 0]
+
+        vc2.merge(&vc1); // vc2 = max([2,1,0], [0,1,0]) + tick = [2, 2, 0]
+
+        assert_eq!(vc2.time_for(0), 2); // took max from vc1
+        assert_eq!(vc2.time_for(1), 2); // was 1, then ticked to 2
+    }
+
+    #[test]
+    fn test_vector_clock_from_bytes_too_short() {
+        assert!(VectorClock::from_bytes(&[]).is_none());
+        assert!(VectorClock::from_bytes(&[1]).is_none());
+        // num_nodes=2, node_id=0, but missing clock data
+        assert!(VectorClock::from_bytes(&[2, 0]).is_none());
+    }
+
+    #[test]
+    fn test_vector_clock_from_bytes_too_many_nodes() {
+        // num_nodes = 17 > MAX_NODES (16)
+        assert!(VectorClock::from_bytes(&[17, 0]).is_none());
+    }
+
+    #[test]
+    fn test_vector_clock_time_for() {
+        let mut vc = VectorClock::new(2, 4);
+        vc.tick();
+        vc.tick();
+        vc.tick();
+
+        assert_eq!(vc.time_for(0), 0);
+        assert_eq!(vc.time_for(1), 0);
+        assert_eq!(vc.time_for(2), 3);
+        assert_eq!(vc.time_for(3), 0);
+    }
+
+    #[test]
+    fn test_vector_clock_equality() {
+        let mut vc1 = VectorClock::new(0, 2);
+        let mut vc2 = VectorClock::new(0, 2);
+
+        assert_eq!(vc1, vc2);
+
+        vc1.tick();
+        assert_ne!(vc1, vc2);
+
+        vc2.tick();
+        assert_eq!(vc1, vc2);
+    }
+
+    #[test]
+    fn test_vector_clock_happened_before_reflexive() {
+        let vc = VectorClock::new(0, 2);
+        // A clock does not happen-before itself (it is Equal)
+        assert!(!vc.happened_before(&vc));
+        assert!(!vc.is_concurrent_with(&vc));
+        assert_eq!(vc.compare(&vc), Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn test_vector_clock_serialized_size() {
+        let vc1 = VectorClock::new(0, 1);
+        assert_eq!(vc1.serialized_size(), 2 + 1 * 8);
+        assert_eq!(vc1.to_bytes().len(), vc1.serialized_size());
+
+        let vc4 = VectorClock::new(0, 4);
+        assert_eq!(vc4.serialized_size(), 2 + 4 * 8);
+        assert_eq!(vc4.to_bytes().len(), vc4.serialized_size());
+    }
+
+    #[test]
+    fn test_hlc_tick_monotonic() {
+        let mut hlc = HybridClock::now(1);
+        let mut prev = hlc;
+        for _ in 0..100 {
+            let current = hlc.tick();
+            assert!(current >= prev);
+            prev = current;
+        }
+    }
+
+    #[test]
+    fn test_hlc_receive_advances() {
+        let mut hlc1 = HybridClock::now(1);
+        let mut hlc2 = HybridClock::now(2);
+
+        // Tick hlc1 forward several times
+        for _ in 0..10 {
+            hlc1.tick();
+        }
+
+        // hlc2 receives from hlc1 and should advance
+        let t_before = hlc2;
+        let t_after = hlc2.receive(&hlc1);
+        assert!(t_after > t_before);
+    }
+
+    #[test]
+    fn test_hlc_serialization_roundtrip_values() {
+        let mut hlc = HybridClock::now(12345);
+        hlc.tick();
+        hlc.tick();
+        hlc.tick();
+
         let bytes = hlc.to_bytes();
         let hlc2 = HybridClock::from_bytes(&bytes);
         assert_eq!(hlc, hlc2);

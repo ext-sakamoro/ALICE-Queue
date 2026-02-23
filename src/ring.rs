@@ -392,4 +392,122 @@ mod tests {
         consumer.consume_batch(&mut batch);
         assert!(batch.is_empty());
     }
+
+    #[test]
+    fn test_pop_empty_returns_none() {
+        let ring: RingBuffer<u64, 4> = RingBuffer::new();
+        assert_eq!(ring.try_pop(), None);
+        assert_eq!(ring.try_pop(), None);
+    }
+
+    #[test]
+    fn test_push_returns_sequence() {
+        let ring: RingBuffer<u64, 8> = RingBuffer::new();
+
+        assert_eq!(ring.try_push(100).unwrap(), 0);
+        assert_eq!(ring.try_push(200).unwrap(), 1);
+        assert_eq!(ring.try_push(300).unwrap(), 2);
+    }
+
+    #[test]
+    fn test_ring_minimum_size() {
+        let ring: RingBuffer<u64, 2> = RingBuffer::new();
+        assert_eq!(ring.capacity(), 2);
+
+        assert!(ring.try_push(1).is_ok());
+        assert!(ring.try_push(2).is_ok());
+        assert!(ring.is_full());
+        assert!(ring.try_push(3).is_err());
+
+        assert_eq!(ring.try_pop(), Some(1));
+        assert!(ring.try_push(3).is_ok());
+        assert_eq!(ring.try_pop(), Some(2));
+        assert_eq!(ring.try_pop(), Some(3));
+        assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn test_len_is_full_is_empty_consistency() {
+        let ring: RingBuffer<u64, 4> = RingBuffer::new();
+
+        assert!(ring.is_empty());
+        assert!(!ring.is_full());
+        assert_eq!(ring.len(), 0);
+
+        ring.try_push(1).unwrap();
+        assert!(!ring.is_empty());
+        assert!(!ring.is_full());
+        assert_eq!(ring.len(), 1);
+
+        ring.try_push(2).unwrap();
+        ring.try_push(3).unwrap();
+        ring.try_push(4).unwrap();
+        assert!(!ring.is_empty());
+        assert!(ring.is_full());
+        assert_eq!(ring.len(), 4);
+
+        ring.try_pop();
+        assert!(!ring.is_empty());
+        assert!(!ring.is_full());
+        assert_eq!(ring.len(), 3);
+    }
+
+    #[test]
+    fn test_head_tail_position_tracking() {
+        let ring: RingBuffer<u64, 8> = RingBuffer::new();
+
+        assert_eq!(ring.head_position(), 0);
+        assert_eq!(ring.tail_position(), 0);
+
+        ring.try_push(10).unwrap();
+        ring.try_push(20).unwrap();
+        assert_eq!(ring.head_position(), 2);
+        assert_eq!(ring.tail_position(), 0);
+
+        ring.try_pop();
+        assert_eq!(ring.head_position(), 2);
+        assert_eq!(ring.tail_position(), 1);
+    }
+
+    #[test]
+    fn test_push_full_returns_original_value() {
+        let ring: RingBuffer<String, 2> = RingBuffer::new();
+        ring.try_push("a".to_string()).unwrap();
+        ring.try_push("b".to_string()).unwrap();
+
+        let err = ring.try_push("overflow".to_string()).unwrap_err();
+        assert_eq!(err, "overflow");
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let ring: RingBuffer<u64, 4> = RingBuffer::default();
+        assert!(ring.is_empty());
+        assert_eq!(ring.capacity(), 4);
+    }
+
+    #[test]
+    fn test_batch_consumer_larger_than_available() {
+        let ring: RingBuffer<u64, 16> = RingBuffer::new();
+        ring.try_push(1).unwrap();
+        ring.try_push(2).unwrap();
+
+        let consumer = BatchConsumer::new(&ring, 100);
+        let mut batch = Vec::new();
+        consumer.consume_batch(&mut batch);
+        assert_eq!(batch, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_batch_consumer_zero_batch_size() {
+        let ring: RingBuffer<u64, 16> = RingBuffer::new();
+        ring.try_push(1).unwrap();
+
+        let consumer = BatchConsumer::new(&ring, 0);
+        let mut batch = Vec::new();
+        consumer.consume_batch(&mut batch);
+        assert!(batch.is_empty());
+        // Item still in ring
+        assert_eq!(ring.len(), 1);
+    }
 }

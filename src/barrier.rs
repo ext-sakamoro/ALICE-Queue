@@ -23,7 +23,10 @@ pub enum GapResult {
     /// Sequence is a duplicate - drop it
     Duplicate,
     /// Sequence is ahead - we have a gap, need to NACK for missing
-    Gap { missing_start: SeqNum, missing_end: SeqNum },
+    Gap {
+        missing_start: SeqNum,
+        missing_end: SeqNum,
+    },
 }
 
 /// Per-sender sequence tracker
@@ -301,5 +304,135 @@ mod tests {
 
         // After rollback, nothing was committed
         assert_eq!(barrier.check(sender, 1), GapResult::Accept);
+    }
+
+    #[test]
+    fn test_barrier_with_capacity() {
+        let barrier = IdempotencyBarrier::with_capacity(100);
+        assert_eq!(barrier.sender_count(), 0);
+    }
+
+    #[test]
+    fn test_last_seen_unknown_sender() {
+        let barrier = IdempotencyBarrier::new();
+        assert_eq!(barrier.last_seen(999), None);
+    }
+
+    #[test]
+    fn test_check_without_mark_does_not_advance() {
+        let mut barrier = IdempotencyBarrier::new();
+        let sender = 1;
+
+        // First check accepts
+        assert_eq!(barrier.check(sender, 1), GapResult::Accept);
+        // Second check on same seq still accepts (state not advanced)
+        assert_eq!(barrier.check(sender, 1), GapResult::Accept);
+        assert_eq!(barrier.last_seen(sender), None);
+
+        // Now mark
+        barrier.mark_processed(sender, 1);
+        assert_eq!(barrier.last_seen(sender), Some(1));
+        // Now it's a duplicate
+        assert_eq!(barrier.check(sender, 1), GapResult::Duplicate);
+    }
+
+    #[test]
+    fn test_clear_resets_all() {
+        let mut barrier = IdempotencyBarrier::new();
+        barrier.check_and_mark(1, 1);
+        barrier.check_and_mark(2, 1);
+        barrier.check_and_mark(3, 1);
+        assert_eq!(barrier.sender_count(), 3);
+
+        barrier.clear();
+        assert_eq!(barrier.sender_count(), 0);
+        assert_eq!(barrier.last_seen(1), None);
+        assert_eq!(barrier.last_seen(2), None);
+        // All senders should accept again
+        assert_eq!(barrier.check(1, 1), GapResult::Accept);
+    }
+
+    #[test]
+    fn test_mark_processed_out_of_order_keeps_highest() {
+        let mut barrier = IdempotencyBarrier::new();
+        let sender = 1;
+
+        barrier.mark_processed(sender, 5);
+        assert_eq!(barrier.last_seen(sender), Some(5));
+
+        // Marking a lower seq should not reduce last_seen
+        barrier.mark_processed(sender, 3);
+        assert_eq!(barrier.last_seen(sender), Some(5));
+
+        // Marking a higher seq should update
+        barrier.mark_processed(sender, 10);
+        assert_eq!(barrier.last_seen(sender), Some(10));
+    }
+
+    #[test]
+    fn test_gap_result_debug() {
+        // Ensure GapResult derives Debug properly
+        let accept = GapResult::Accept;
+        let dup = GapResult::Duplicate;
+        let gap = GapResult::Gap {
+            missing_start: 2,
+            missing_end: 5,
+        };
+
+        assert_eq!(format!("{:?}", accept), "Accept");
+        assert_eq!(format!("{:?}", dup), "Duplicate");
+        assert!(format!("{:?}", gap).contains("missing_start: 2"));
+    }
+
+    #[test]
+    fn test_batch_barrier_inner_access() {
+        let mut barrier = BatchBarrier::new();
+        barrier.mark(1, 1);
+        barrier.commit();
+
+        let inner = barrier.inner();
+        assert_eq!(inner.last_seen(1), Some(1));
+        assert_eq!(inner.sender_count(), 1);
+    }
+
+    #[test]
+    fn test_batch_barrier_multiple_commits() {
+        let mut barrier = BatchBarrier::new();
+
+        // First batch
+        barrier.mark(1, 1);
+        barrier.mark(1, 2);
+        barrier.commit();
+        assert_eq!(barrier.check(1, 2), GapResult::Duplicate);
+        assert_eq!(barrier.check(1, 3), GapResult::Accept);
+
+        // Second batch
+        barrier.mark(1, 3);
+        barrier.commit();
+        assert_eq!(barrier.check(1, 3), GapResult::Duplicate);
+    }
+
+    #[test]
+    fn test_default_trait_barrier() {
+        let b1 = IdempotencyBarrier::default();
+        let b2 = BatchBarrier::default();
+        assert_eq!(b1.sender_count(), 0);
+        assert_eq!(b2.inner().sender_count(), 0);
+    }
+
+    #[test]
+    fn test_seq_zero_handling() {
+        let mut barrier = IdempotencyBarrier::new();
+        let sender = 1;
+
+        // Seq 0 should be accepted as first message
+        assert_eq!(barrier.check_and_mark(sender, 0), GapResult::Accept);
+        assert_eq!(barrier.last_seen(sender), Some(0));
+
+        // Seq 0 again should be duplicate
+        assert_eq!(barrier.check(sender, 0), GapResult::Duplicate);
+
+        // Seq 1 should be accepted
+        assert_eq!(barrier.check_and_mark(sender, 1), GapResult::Accept);
     }
 }

@@ -95,6 +95,7 @@ impl<const N: usize> AliceQueue<N> {
 
     /// Enqueue a message
     #[inline]
+    #[allow(clippy::result_large_err)]
     pub fn enqueue(&self, msg: Message) -> Result<u64, Message> {
         self.ring.try_push(msg)
     }
@@ -224,7 +225,13 @@ mod tests {
         assert_eq!(result1, GapResult::Accept);
 
         let (_, result3) = queue.dequeue().unwrap().unwrap();
-        assert!(matches!(result3, GapResult::Gap { missing_start: 2, missing_end: 3 }));
+        assert!(matches!(
+            result3,
+            GapResult::Gap {
+                missing_start: 2,
+                missing_end: 3
+            }
+        ));
     }
 
     #[test]
@@ -244,5 +251,118 @@ mod tests {
                 _ => panic!("Expected Accept"),
             }
         }
+    }
+
+    #[test]
+    fn test_queue_default_trait() {
+        let queue = AliceQueue::<16>::default();
+        assert!(queue.is_empty());
+        assert_eq!(queue.len(), 0);
+    }
+
+    #[test]
+    fn test_queue_dequeue_empty() {
+        let mut queue = AliceQueue::<16>::new();
+        let result = queue.dequeue().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_queue_peek_result_returns_none() {
+        let queue = AliceQueue::<16>::new();
+        assert!(queue.peek_result().is_none());
+
+        // Even after enqueue
+        let sender = test_sender(1);
+        queue
+            .enqueue(Message::new(sender, 1, b"data".to_vec()))
+            .unwrap();
+        assert!(queue.peek_result().is_none());
+    }
+
+    #[test]
+    fn test_queue_multiple_senders() {
+        let mut queue = AliceQueue::<16>::new();
+        let sender_a = test_sender(1);
+        let sender_b = test_sender(2);
+
+        queue
+            .enqueue(Message::new(sender_a, 1, b"a1".to_vec()))
+            .unwrap();
+        queue
+            .enqueue(Message::new(sender_b, 1, b"b1".to_vec()))
+            .unwrap();
+        queue
+            .enqueue(Message::new(sender_a, 2, b"a2".to_vec()))
+            .unwrap();
+
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(result, GapResult::Accept);
+        assert_eq!(msg.payload, b"a1");
+
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(result, GapResult::Accept);
+        assert_eq!(msg.payload, b"b1");
+
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(result, GapResult::Accept);
+        assert_eq!(msg.payload, b"a2");
+    }
+
+    #[test]
+    fn test_queue_enqueue_returns_position() {
+        let queue = AliceQueue::<16>::new();
+        let sender = test_sender(1);
+
+        let pos0 = queue
+            .enqueue(Message::new(sender, 1, b"first".to_vec()))
+            .unwrap();
+        let pos1 = queue
+            .enqueue(Message::new(sender, 2, b"second".to_vec()))
+            .unwrap();
+
+        assert_eq!(pos0, 0);
+        assert_eq!(pos1, 1);
+    }
+
+    #[test]
+    fn test_queue_full_rejects() {
+        let queue = AliceQueue::<4>::new();
+        let sender = test_sender(1);
+
+        for i in 0..4 {
+            queue
+                .enqueue(Message::new(sender, i + 1, b"data".to_vec()))
+                .unwrap();
+        }
+
+        let result = queue.enqueue(Message::new(sender, 5, b"overflow".to_vec()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_version_constant() {
+        assert!(!VERSION.is_empty());
+        assert!(VERSION.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_sender_to_id_consistency() {
+        // Two senders with same first 8 bytes should map to same ID
+        let mut sender1 = [0u8; 32];
+        sender1[0] = 42;
+        let mut sender2 = [0u8; 32];
+        sender2[0] = 42;
+        sender2[31] = 99; // differs after first 8 bytes
+
+        let id1 = AliceQueue::<4>::sender_to_id(&sender1).unwrap();
+        let id2 = AliceQueue::<4>::sender_to_id(&sender2).unwrap();
+        assert_eq!(id1, id2);
+
+        // Different first 8 bytes should map differently
+        let mut sender3 = [0u8; 32];
+        sender3[0] = 43;
+        let id3 = AliceQueue::<4>::sender_to_id(&sender3).unwrap();
+        assert_ne!(id1, id3);
     }
 }
