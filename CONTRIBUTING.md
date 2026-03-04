@@ -1,5 +1,19 @@
 # Contributing to ALICE-Queue
 
+## Prerequisites
+
+- Rust 1.70+ (stable)
+- `clippy`, `rustfmt` コンポーネント (`rustup component add clippy rustfmt`)
+
+## Code Style
+
+- `cargo fmt` 準拠（CI で `--check` 実行）
+- `cargo clippy --lib --tests -- -W clippy::all -W clippy::pedantic` 警告ゼロ
+- パブリック関数には `#[must_use]` を付与
+- `Result` 返却関数には `# Errors` docセクション必須
+- `no_std` 互換: `std` は feature gate 経由（`alloc` のみ）
+- コード内コメント: 日本語
+
 ## Build
 
 ```bash

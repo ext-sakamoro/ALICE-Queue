@@ -1,3 +1,28 @@
+// テストコードではformat!やリテラル等でpedantic警告が出るため抑制
+#![cfg_attr(
+    test,
+    allow(
+        clippy::uninlined_format_args,
+        clippy::unreadable_literal,
+        clippy::identity_op,
+        clippy::manual_assert,
+        clippy::range_plus_one,
+        unused_must_use,
+    )
+)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    clippy::module_name_repetitions,
+    clippy::inline_always,
+    clippy::too_many_lines
+)]
+
 //! # ALICE-Queue (Optimized Edition)
 //!
 //! **Deterministic Zero-Copy Message Log**
@@ -86,6 +111,7 @@ pub struct AliceQueue<const N: usize> {
 
 impl<const N: usize> AliceQueue<N> {
     /// Create new queue
+    #[must_use]
     pub fn new() -> Self {
         Self {
             ring: RingBuffer::new(),
@@ -94,6 +120,10 @@ impl<const N: usize> AliceQueue<N> {
     }
 
     /// Enqueue a message
+    ///
+    /// # Errors
+    ///
+    /// Returns the message back if the ring buffer is full.
     #[inline]
     #[allow(clippy::result_large_err)]
     pub fn enqueue(&self, msg: Message) -> Result<u64, Message> {
@@ -105,11 +135,14 @@ impl<const N: usize> AliceQueue<N> {
     /// Returns `Ok(Some((message, GapResult)))` if a message was available,
     /// `Ok(None)` if the queue is empty, or `Err` if the message header is
     /// malformed (e.g. sender key too short to derive a `SenderId`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if the sender key cannot be converted to a `SenderId`.
     #[inline]
     pub fn dequeue(&mut self) -> Result<Option<(Message, GapResult)>, &'static str> {
-        let msg = match self.ring.try_pop() {
-            Some(m) => m,
-            None => return Ok(None),
+        let Some(msg) = self.ring.try_pop() else {
+            return Ok(None);
         };
         let sender_id = Self::sender_to_id(&msg.header.sender)?;
         let result = self.barrier.check_and_mark(sender_id, msg.header.seq);

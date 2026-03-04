@@ -43,12 +43,12 @@ const JOURNAL_HEADER_SIZE: usize = std::mem::size_of::<JournalHeader>();
 #[inline]
 fn crc32(data: &[u8]) -> u32 {
     // Simple polynomial CRC (not cryptographic, just for integrity)
-    let mut crc: u32 = 0xFFFFFFFF;
+    let mut crc: u32 = 0xFFFF_FFFF;
     for &byte in data {
         crc ^= byte as u32;
         for _ in 0..8 {
             crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB88320
+                (crc >> 1) ^ 0xEDB8_8320
             } else {
                 crc >> 1
             };
@@ -76,6 +76,10 @@ impl Journal {
     ///
     /// - `path`: File path
     /// - `capacity`: Pre-allocated size in bytes (will be rounded up to page size)
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the file cannot be opened, allocated, or memory-mapped.
     pub fn open<P: AsRef<Path>>(path: P, capacity: u64) -> io::Result<Self> {
         let path = path.as_ref();
         let exists = path.exists();
@@ -175,7 +179,11 @@ impl Journal {
 
     /// Append an entry to the journal
     ///
-    /// Returns the offset where entry was written
+    /// Returns the offset where entry was written.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the journal is full.
     pub fn append(&mut self, data: &[u8]) -> io::Result<u64> {
         let entry_size = HEADER_SIZE + data.len();
         let write_pos = self.write_pos.load(Ordering::Relaxed);
@@ -211,7 +219,11 @@ impl Journal {
 
     /// Read an entry at offset
     ///
-    /// Returns the entry data and next offset
+    /// Returns the entry data and next offset.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the offset is past end or the checksum is invalid.
     pub fn read_at(&self, offset: u64) -> io::Result<(Vec<u8>, u64)> {
         let offset = offset as usize;
 
@@ -277,6 +289,10 @@ impl Journal {
     }
 
     /// Sync to disk
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the flush or fsync fails.
     pub fn sync(&self) -> io::Result<()> {
         self.mmap.flush()?;
         self.file.sync_all()
@@ -309,7 +325,16 @@ pub struct JournalIter<'a> {
     offset: u64,
 }
 
-impl<'a> Iterator for JournalIter<'a> {
+impl<'a> IntoIterator for &'a Journal {
+    type Item = io::Result<(u64, Vec<u8>)>;
+    type IntoIter = JournalIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl Iterator for JournalIter<'_> {
     type Item = io::Result<(u64, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {

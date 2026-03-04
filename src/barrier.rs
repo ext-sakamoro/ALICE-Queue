@@ -49,6 +49,7 @@ pub struct IdempotencyBarrier {
 
 impl IdempotencyBarrier {
     /// Create new barrier
+    #[must_use]
     pub fn new() -> Self {
         Self {
             senders: HashMap::new(),
@@ -56,6 +57,7 @@ impl IdempotencyBarrier {
     }
 
     /// Create with pre-allocated capacity
+    #[must_use]
     pub fn with_capacity(sender_count: usize) -> Self {
         Self {
             senders: HashMap::with_capacity(sender_count),
@@ -66,6 +68,7 @@ impl IdempotencyBarrier {
     ///
     /// Returns the gap result indicating whether to accept, drop, or NACK
     #[inline]
+    #[must_use]
     pub fn check(&self, sender: SenderId, seq: SeqNum) -> GapResult {
         match self.senders.get(&sender) {
             None => {
@@ -115,6 +118,7 @@ impl IdempotencyBarrier {
     }
 
     /// Get last seen sequence for a sender
+    #[must_use]
     pub fn last_seen(&self, sender: SenderId) -> Option<SeqNum> {
         self.senders
             .get(&sender)
@@ -133,6 +137,7 @@ impl IdempotencyBarrier {
     }
 
     /// Number of tracked senders
+    #[must_use]
     pub fn sender_count(&self) -> usize {
         self.senders.len()
     }
@@ -155,6 +160,7 @@ pub struct BatchBarrier {
 }
 
 impl BatchBarrier {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             barrier: IdempotencyBarrier::new(),
@@ -164,6 +170,7 @@ impl BatchBarrier {
 
     /// Check a message (does not mark as processed yet)
     #[inline]
+    #[must_use]
     pub fn check(&self, sender: SenderId, seq: SeqNum) -> GapResult {
         self.barrier.check(sender, seq)
     }
@@ -187,6 +194,7 @@ impl BatchBarrier {
     }
 
     /// Get inner barrier reference
+    #[must_use]
     pub fn inner(&self) -> &IdempotencyBarrier {
         &self.barrier
     }

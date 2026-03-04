@@ -3,8 +3,8 @@
 //! Encrypted message queue: seal payloads with XChaCha20-Poly1305 before
 //! enqueue, unseal after dequeue. BLAKE3 integrity verification.
 
-use alice_crypto::{Key, seal, open, hash, Hash};
 use crate::message::{Message, SenderKey};
+use alice_crypto::{hash, open, seal, Hash, Key};
 
 /// Encrypted message wrapper.
 pub struct EncryptedQueue {
@@ -18,14 +18,22 @@ impl EncryptedQueue {
     }
 
     /// Create with a randomly generated key.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key generation fails.
     pub fn generate() -> Result<Self, &'static str> {
         let key = Key::generate().map_err(|_| "key generation failed")?;
         Ok(Self { key })
     }
 
-    /// Seal a message's payload with XChaCha20-Poly1305.
+    /// Seal a message's payload with `XChaCha20-Poly1305`.
     ///
     /// Returns a new Message with encrypted payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `CipherError` if encryption fails.
     pub fn seal_message(&self, msg: &Message) -> Result<Message, alice_crypto::CipherError> {
         let ciphertext = seal(&self.key, &msg.payload)?;
         Ok(Message::new(msg.header.sender, msg.header.seq, ciphertext))
@@ -34,6 +42,10 @@ impl EncryptedQueue {
     /// Unseal a message's encrypted payload.
     ///
     /// Returns a new Message with decrypted payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `CipherError` if decryption fails.
     pub fn open_message(&self, msg: &Message) -> Result<Message, alice_crypto::CipherError> {
         let plaintext = open(&self.key, &msg.payload)?;
         Ok(Message::new(msg.header.sender, msg.header.seq, plaintext))
@@ -51,7 +63,9 @@ impl EncryptedQueue {
     }
 
     /// Get a reference to the encryption key.
-    pub fn key(&self) -> &Key { &self.key }
+    pub fn key(&self) -> &Key {
+        &self.key
+    }
 }
 
 #[cfg(test)]

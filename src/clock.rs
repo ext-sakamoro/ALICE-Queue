@@ -28,6 +28,11 @@ pub struct VectorClock {
 
 impl VectorClock {
     /// Create a new vector clock for a node
+    ///
+    /// # Panics
+    ///
+    /// Panics if `node_id` or `num_nodes` exceeds `MAX_NODES`.
+    #[must_use]
     pub fn new(node_id: u8, num_nodes: u8) -> Self {
         assert!((node_id as usize) < MAX_NODES, "Node ID too large");
         assert!((num_nodes as usize) <= MAX_NODES, "Too many nodes");
@@ -48,12 +53,14 @@ impl VectorClock {
 
     /// Get current local time
     #[inline]
+    #[must_use]
     pub fn local_time(&self) -> u64 {
         self.clocks[self.node_id as usize]
     }
 
     /// Get time for a specific node
     #[inline]
+    #[must_use]
     pub fn time_for(&self, node_id: u8) -> u64 {
         self.clocks[node_id as usize]
     }
@@ -77,6 +84,7 @@ impl VectorClock {
     /// - `Greater`: other happened-before self
     /// - `Equal`: same event
     /// - `None`: concurrent (incomparable)
+    #[must_use]
     pub fn compare(&self, other: &VectorClock) -> Option<Ordering> {
         let mut less = false;
         let mut greater = false;
@@ -107,19 +115,22 @@ impl VectorClock {
 
     /// Check if self happened-before other
     #[inline]
+    #[must_use]
     pub fn happened_before(&self, other: &VectorClock) -> bool {
         matches!(self.compare(other), Some(Ordering::Less))
     }
 
     /// Check if events are concurrent
     #[inline]
+    #[must_use]
     pub fn is_concurrent_with(&self, other: &VectorClock) -> bool {
         self.compare(other).is_none()
     }
 
     /// Serialize to bytes (compact format)
     ///
-    /// Format: [num_nodes: u8][node_id: u8][clocks: u64 * num_nodes]
+    /// Format: [`num_nodes`: u8][node_id: u8][clocks: u64 * `num_nodes`]
+    #[must_use]
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(2 + self.num_nodes as usize * 8);
         bytes.push(self.num_nodes);
@@ -131,6 +142,7 @@ impl VectorClock {
     }
 
     /// Deserialize from bytes
+    #[must_use]
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < 2 {
             return None;
@@ -163,6 +175,7 @@ impl VectorClock {
 
     /// Size in bytes when serialized
     #[inline]
+    #[must_use]
     pub fn serialized_size(&self) -> usize {
         2 + self.num_nodes as usize * 8
     }
@@ -199,6 +212,7 @@ pub struct HybridClock {
 
 impl HybridClock {
     /// Create new HLC with current time
+    #[must_use]
     pub fn now(node_id: u16) -> Self {
         Self {
             physical: Self::current_millis(),
@@ -208,6 +222,7 @@ impl HybridClock {
     }
 
     /// Tick for local event
+    #[must_use]
     pub fn tick(&mut self) -> Self {
         let now = Self::current_millis();
 
@@ -222,6 +237,7 @@ impl HybridClock {
     }
 
     /// Update on receive (merge with sender's clock)
+    #[must_use]
     pub fn receive(&mut self, sender: &HybridClock) -> Self {
         let now = Self::current_millis();
 
@@ -242,6 +258,7 @@ impl HybridClock {
     }
 
     /// Serialize to bytes (16 bytes total)
+    #[must_use]
     pub fn to_bytes(&self) -> [u8; 14] {
         let mut bytes = [0u8; 14];
         bytes[0..8].copy_from_slice(&self.physical.to_le_bytes());
@@ -255,6 +272,7 @@ impl HybridClock {
     /// The argument is a fixed-size `[u8; 14]` reference, so every sub-slice
     /// has a statically-known length; we index directly to avoid any runtime
     /// failure path that `try_into().unwrap()` would introduce.
+    #[must_use]
     pub fn from_bytes(bytes: &[u8; 14]) -> Self {
         Self {
             physical: u64::from_le_bytes([

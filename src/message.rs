@@ -32,7 +32,7 @@ pub struct MessageHeader {
     /// Vector clock size (0 if not included)
     pub vclock_size: u8,
     /// Reserved
-    pub _reserved: u8,
+    pub reserved: u8,
 }
 
 impl MessageHeader {
@@ -61,6 +61,7 @@ pub struct Message {
 
 impl Message {
     /// Create a new message
+    #[must_use]
     pub fn new(sender: SenderKey, seq: u64, payload: Vec<u8>) -> Self {
         let id = Self::compute_id(&sender, seq, &payload);
 
@@ -72,7 +73,7 @@ impl Message {
                 payload_len: payload.len() as u32,
                 flags: flags::NONE,
                 vclock_size: 0,
-                _reserved: 0,
+                reserved: 0,
             },
             vclock: None,
             payload,
@@ -80,6 +81,7 @@ impl Message {
     }
 
     /// Create message with vector clock
+    #[must_use]
     pub fn with_vclock(sender: SenderKey, seq: u64, payload: Vec<u8>, vclock: VectorClock) -> Self {
         let id = Self::compute_id(&sender, seq, &payload);
 
@@ -91,7 +93,7 @@ impl Message {
                 payload_len: payload.len() as u32,
                 flags: flags::HAS_VCLOCK,
                 vclock_size: vclock.serialized_size() as u8,
-                _reserved: 0,
+                reserved: 0,
             },
             vclock: Some(vclock),
             payload,
@@ -102,6 +104,7 @@ impl Message {
     ///
     /// ID = BLAKE3(sender || seq || payload)
     #[inline]
+    #[must_use]
     pub fn compute_id(sender: &SenderKey, seq: u64, payload: &[u8]) -> MessageId {
         let mut hasher = blake3::Hasher::new();
         hasher.update(sender);
@@ -112,15 +115,20 @@ impl Message {
 
     /// Verify message ID is correct
     #[inline]
+    #[must_use]
     pub fn verify_id(&self) -> bool {
         let expected = Self::compute_id(&self.header.sender, self.header.seq, &self.payload);
         self.header.id == expected
     }
 
     /// Serialize to bytes
+    #[must_use]
     pub fn to_bytes(&self) -> Vec<u8> {
-        let vclock_bytes = self.vclock.as_ref().map(|vc| vc.to_bytes());
-        let vclock_len = vclock_bytes.as_ref().map(|b| b.len()).unwrap_or(0);
+        let vclock_bytes = self
+            .vclock
+            .as_ref()
+            .map(super::clock::VectorClock::to_bytes);
+        let vclock_len = vclock_bytes.as_ref().map_or(0, std::vec::Vec::len);
 
         let total_len = MessageHeader::SIZE + vclock_len + self.payload.len();
         let mut bytes = Vec::with_capacity(total_len);
@@ -132,7 +140,7 @@ impl Message {
         bytes.extend_from_slice(&self.header.payload_len.to_le_bytes());
         bytes.extend_from_slice(&self.header.flags.to_le_bytes());
         bytes.push(self.header.vclock_size);
-        bytes.push(self.header._reserved);
+        bytes.push(self.header.reserved);
 
         // Write vector clock if present
         if let Some(ref vc_bytes) = vclock_bytes {
@@ -146,6 +154,7 @@ impl Message {
     }
 
     /// Deserialize from bytes
+    #[must_use]
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < MessageHeader::SIZE {
             return None;
@@ -158,7 +167,7 @@ impl Message {
         let payload_len = u32::from_le_bytes(bytes[72..76].try_into().ok()?);
         let flags = u16::from_le_bytes(bytes[76..78].try_into().ok()?);
         let vclock_size = bytes[78];
-        let _reserved = bytes[79];
+        let reserved = bytes[79];
 
         let header = MessageHeader {
             id,
@@ -167,7 +176,7 @@ impl Message {
             payload_len,
             flags,
             vclock_size,
-            _reserved,
+            reserved,
         };
 
         let mut offset = MessageHeader::SIZE;
@@ -200,6 +209,7 @@ impl Message {
     }
 
     /// Total serialized size
+    #[must_use]
     pub fn serialized_size(&self) -> usize {
         MessageHeader::SIZE + self.header.vclock_size as usize + self.payload.len()
     }
@@ -215,6 +225,7 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
+    #[must_use]
     pub fn new(sender: SenderKey, seq: u64) -> Self {
         Self {
             sender,
@@ -225,22 +236,26 @@ impl MessageBuilder {
         }
     }
 
+    #[must_use]
     pub fn payload(mut self, data: Vec<u8>) -> Self {
         self.payload = data;
         self
     }
 
+    #[must_use]
     pub fn vclock(mut self, vc: VectorClock) -> Self {
         self.vclock = Some(vc);
         self.flags |= flags::HAS_VCLOCK;
         self
     }
 
+    #[must_use]
     pub fn requires_ack(mut self) -> Self {
         self.flags |= flags::REQUIRES_ACK;
         self
     }
 
+    #[must_use]
     pub fn build(self) -> Message {
         let id = Message::compute_id(&self.sender, self.seq, &self.payload);
 
@@ -254,9 +269,8 @@ impl MessageBuilder {
                 vclock_size: self
                     .vclock
                     .as_ref()
-                    .map(|vc| vc.serialized_size() as u8)
-                    .unwrap_or(0),
-                _reserved: 0,
+                    .map_or(0, |vc| vc.serialized_size() as u8),
+                reserved: 0,
             },
             vclock: self.vclock,
             payload: self.payload,

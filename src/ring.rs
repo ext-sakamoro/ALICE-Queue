@@ -22,6 +22,7 @@ pub struct PaddedAtomicU64 {
 }
 
 impl PaddedAtomicU64 {
+    #[must_use]
     pub const fn new(v: u64) -> Self {
         Self {
             value: AtomicU64::new(v),
@@ -44,6 +45,11 @@ impl PaddedAtomicU64 {
         self.value.fetch_add(val, ordering)
     }
 
+    /// Compare-and-swap the counter value.
+    ///
+    /// # Errors
+    ///
+    /// Returns the current value if the exchange fails.
     #[inline]
     pub fn compare_exchange(
         &self,
@@ -104,7 +110,12 @@ pub struct RingBuffer<T, const N: usize> {
 impl<T, const N: usize> RingBuffer<T, N> {
     /// Create new ring buffer
     ///
-    /// N must be a power of 2
+    /// N must be a power of 2.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `N` is not a power of two or is less than 2.
+    #[must_use]
     pub fn new() -> Self {
         assert!(N.is_power_of_two(), "Ring size must be power of 2");
         assert!(N >= 2, "Ring size must be at least 2");
@@ -130,7 +141,9 @@ impl<T, const N: usize> RingBuffer<T, N> {
 
     /// Try to publish a value (non-blocking)
     ///
-    /// Returns `Err(value)` if buffer is full
+    /// # Errors
+    ///
+    /// Returns `Err(value)` if buffer is full.
     #[inline]
     pub fn try_push(&self, value: T) -> Result<u64, T> {
         let head = self.head.load(Ordering::Relaxed);
@@ -245,7 +258,7 @@ impl<'a, T, const N: usize> BatchConsumer<'a, T, N> {
         Self { ring, batch_size }
     }
 
-    /// Consume up to batch_size items
+    /// Consume up to `batch_size` items
     pub fn consume_batch(&self, buffer: &mut Vec<T>) {
         buffer.clear();
         for _ in 0..self.batch_size {

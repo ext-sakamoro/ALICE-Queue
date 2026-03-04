@@ -4,7 +4,7 @@
 //!
 //! Author: Moroya Sakamoto
 
-use alice_text::ALICEText;
+use alice_text::{ALICEText, EncodingMode};
 
 /// Encoding type marker
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub struct TextPayload {
 
 /// Encode text into a compact queue payload
 pub fn encode_text_payload(text: &str) -> TextPayload {
-    let compressor = ALICEText::new();
+    let mut compressor = ALICEText::new(EncodingMode::Pattern);
     match compressor.compress(text) {
         Ok(compressed) => TextPayload {
             original_len: text.len() as u32,
@@ -40,17 +40,20 @@ pub fn encode_text_payload(text: &str) -> TextPayload {
 }
 
 /// Decode a queue payload back to text
+///
+/// # Errors
+///
+/// Returns an error string if decompression or UTF-8 decoding fails.
 pub fn decode_text_payload(payload: &TextPayload) -> Result<String, String> {
     match payload.encoding {
         TextEncoding::AliceText => {
-            let decompressor = ALICEText::new();
+            let mut decompressor = ALICEText::new(EncodingMode::Pattern);
             decompressor
                 .decompress(&payload.compressed)
                 .map_err(|e| format!("Decompress error: {}", e))
         }
         TextEncoding::Raw => {
-            String::from_utf8(payload.compressed.clone())
-                .map_err(|e| format!("UTF-8 error: {}", e))
+            String::from_utf8(payload.compressed.clone()).map_err(|e| format!("UTF-8 error: {}", e))
         }
     }
 }
@@ -64,7 +67,11 @@ pub fn serialize_payload(payload: &TextPayload) -> Vec<u8> {
     out
 }
 
-/// Deserialize bytes from queue into TextPayload
+/// Deserialize bytes from queue into `TextPayload`
+///
+/// # Errors
+///
+/// Returns an error string if the data is too short or has an unknown encoding.
 pub fn deserialize_payload(data: &[u8]) -> Result<TextPayload, String> {
     if data.len() < 5 {
         return Err("Payload too short".into());
@@ -76,7 +83,11 @@ pub fn deserialize_payload(data: &[u8]) -> Result<TextPayload, String> {
     };
     let original_len = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     let compressed = data[5..].to_vec();
-    Ok(TextPayload { compressed, original_len, encoding })
+    Ok(TextPayload {
+        compressed,
+        original_len,
+        encoding,
+    })
 }
 
 /// Batched text log pipeline
@@ -87,7 +98,10 @@ pub struct TextLogPipeline {
 
 impl TextLogPipeline {
     pub fn new() -> Self {
-        Self { buffer: Vec::new(), total_bytes_saved: 0 }
+        Self {
+            buffer: Vec::new(),
+            total_bytes_saved: 0,
+        }
     }
 
     /// Add a log line to the pipeline
