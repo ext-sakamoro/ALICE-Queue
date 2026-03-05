@@ -150,7 +150,7 @@ impl<const N: usize> AliceQueue<N> {
     }
 
     /// Peek without removing (checks next message)
-    pub fn peek_result(&self) -> Option<GapResult> {
+    pub const fn peek_result(&self) -> Option<GapResult> {
         // Can't easily peek ring buffer, so this is a no-op
         // In real implementation, would need separate peek
         None
@@ -274,7 +274,7 @@ mod tests {
         let sender = [1u8; 32];
         let msg = Message::new(sender, 1, b"hello".to_vec());
 
-        ring.try_push(msg.clone()).unwrap();
+        ring.try_push(msg).unwrap();
 
         let mut barrier = IdempotencyBarrier::new();
         if let Some(msg) = ring.try_pop() {
@@ -381,21 +381,91 @@ mod tests {
 
     #[test]
     fn test_sender_to_id_consistency() {
-        // Two senders with same first 8 bytes should map to same ID
+        // 最初の 8 バイトが同じなら同一 ID にマップされる
         let mut sender1 = [0u8; 32];
         sender1[0] = 42;
         let mut sender2 = [0u8; 32];
         sender2[0] = 42;
-        sender2[31] = 99; // differs after first 8 bytes
+        sender2[31] = 99; // 先頭 8 バイト以降が異なる
 
         let id1 = AliceQueue::<4>::sender_to_id(&sender1).unwrap();
         let id2 = AliceQueue::<4>::sender_to_id(&sender2).unwrap();
         assert_eq!(id1, id2);
 
-        // Different first 8 bytes should map differently
+        // 先頭 8 バイトが異なれば別の ID になる
         let mut sender3 = [0u8; 32];
         sender3[0] = 43;
         let id3 = AliceQueue::<4>::sender_to_id(&sender3).unwrap();
         assert_ne!(id1, id3);
+    }
+
+    #[test]
+    fn test_sender_to_id_little_endian() {
+        // バイト順が little-endian であることを確認する
+        let mut sender = [0u8; 32];
+        sender[0] = 0x01;
+        // 先頭 8 バイトは [0x01, 0x00, 0x00, ...] → LE u64 = 1
+        let id = AliceQueue::<4>::sender_to_id(&sender).unwrap();
+        assert_eq!(id, 1u64);
+    }
+
+    #[test]
+    fn test_queue_drain_then_refill() {
+        // キューを空にした後に再度エンキューできる
+        let mut queue = AliceQueue::<8>::new();
+        let sender = test_sender(1);
+
+        for i in 1u64..=4 {
+            queue
+                .enqueue(Message::new(sender, i, b"first-round".to_vec()))
+                .unwrap();
+        }
+        while queue.dequeue().unwrap().is_some() {}
+        assert!(queue.is_empty());
+
+        // 2 ラウンド目: seq を続きから送る
+        for i in 5u64..=8 {
+            queue
+                .enqueue(Message::new(sender, i, b"second-round".to_vec()))
+                .unwrap();
+        }
+        assert_eq!(queue.len(), 4);
+
+        let (msg, result) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(result, GapResult::Accept);
+        assert_eq!(msg.header.seq, 5);
+    }
+
+    #[test]
+    fn test_queue_gap_and_fill() {
+        // ギャップを検出した後、欠落分を埋めると再び Accept される
+        let mut queue = AliceQueue::<16>::new();
+        let sender = test_sender(5);
+
+        queue
+            .enqueue(Message::new(sender, 1, b"one".to_vec()))
+            .unwrap();
+        queue
+            .enqueue(Message::new(sender, 4, b"four".to_vec()))
+            .unwrap(); // seq 2, 3 が欠落
+
+        let (_, r1) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(r1, GapResult::Accept);
+
+        let (_, r4) = queue.dequeue().unwrap().unwrap();
+        assert!(matches!(
+            r4,
+            GapResult::Gap {
+                missing_start: 2,
+                missing_end: 4
+            }
+        ));
+
+        // 欠落分を埋める（barrier は Gap を返すだけで last_seen を進めないため）
+        queue
+            .enqueue(Message::new(sender, 2, b"two".to_vec()))
+            .unwrap();
+        let (_, r2) = queue.dequeue().unwrap().unwrap();
+        assert_eq!(r2, GapResult::Accept);
     }
 }

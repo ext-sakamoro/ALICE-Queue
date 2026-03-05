@@ -281,7 +281,7 @@ impl Journal {
     }
 
     /// Iterate over all entries
-    pub fn iter(&self) -> JournalIter<'_> {
+    pub const fn iter(&self) -> JournalIter<'_> {
         JournalIter {
             journal: self,
             offset: JOURNAL_HEADER_SIZE as u64,
@@ -309,7 +309,7 @@ impl Journal {
     }
 
     /// Total capacity
-    pub fn capacity(&self) -> u64 {
+    pub const fn capacity(&self) -> u64 {
         self.capacity
     }
 

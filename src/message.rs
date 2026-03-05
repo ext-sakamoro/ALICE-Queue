@@ -210,7 +210,7 @@ impl Message {
 
     /// Total serialized size
     #[must_use]
-    pub fn serialized_size(&self) -> usize {
+    pub const fn serialized_size(&self) -> usize {
         MessageHeader::SIZE + self.header.vclock_size as usize + self.payload.len()
     }
 }
@@ -226,7 +226,7 @@ pub struct MessageBuilder {
 
 impl MessageBuilder {
     #[must_use]
-    pub fn new(sender: SenderKey, seq: u64) -> Self {
+    pub const fn new(sender: SenderKey, seq: u64) -> Self {
         Self {
             sender,
             seq,
@@ -243,14 +243,14 @@ impl MessageBuilder {
     }
 
     #[must_use]
-    pub fn vclock(mut self, vc: VectorClock) -> Self {
+    pub const fn vclock(mut self, vc: VectorClock) -> Self {
         self.vclock = Some(vc);
         self.flags |= flags::HAS_VCLOCK;
         self
     }
 
     #[must_use]
-    pub fn requires_ack(mut self) -> Self {
+    pub const fn requires_ack(mut self) -> Self {
         self.flags |= flags::REQUIRES_ACK;
         self
     }

@@ -254,7 +254,7 @@ pub struct BatchConsumer<'a, T, const N: usize> {
 }
 
 impl<'a, T, const N: usize> BatchConsumer<'a, T, N> {
-    pub fn new(ring: &'a RingBuffer<T, N>, batch_size: usize) -> Self {
+    pub const fn new(ring: &'a RingBuffer<T, N>, batch_size: usize) -> Self {
         Self { ring, batch_size }
     }
 
@@ -520,7 +520,74 @@ mod tests {
         let mut batch = Vec::new();
         consumer.consume_batch(&mut batch);
         assert!(batch.is_empty());
-        // Item still in ring
+        // アイテムはリングに残っているままのはず
         assert_eq!(ring.len(), 1);
+    }
+
+    #[test]
+    fn test_padded_atomic_fetch_add() {
+        // fetch_add は旧値を返し、内部は更新される
+        let counter = PaddedAtomicU64::new(10);
+        let old = counter.fetch_add(5, Ordering::Relaxed);
+        assert_eq!(old, 10);
+        assert_eq!(counter.load(Ordering::Relaxed), 15);
+    }
+
+    #[test]
+    fn test_padded_atomic_compare_exchange_success() {
+        // 期待値と一致する場合は交換成功
+        let val = PaddedAtomicU64::new(42);
+        let result = val.compare_exchange(42, 100, Ordering::SeqCst, Ordering::SeqCst);
+        assert_eq!(result, Ok(42));
+        assert_eq!(val.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    fn test_padded_atomic_compare_exchange_failure() {
+        // 期待値と不一致の場合は交換失敗し、現在値が Err で返る
+        let val = PaddedAtomicU64::new(42);
+        let result = val.compare_exchange(99, 100, Ordering::SeqCst, Ordering::SeqCst);
+        assert_eq!(result, Err(42));
+        assert_eq!(val.load(Ordering::Relaxed), 42);
+    }
+
+    #[test]
+    fn test_padded_atomic_store_load() {
+        let val = PaddedAtomicU64::new(0);
+        val.store(u64::MAX, Ordering::Release);
+        assert_eq!(val.load(Ordering::Acquire), u64::MAX);
+    }
+
+    #[test]
+    fn test_slot_state_discriminant_values() {
+        // ディスクリミナント値はプロトコルの一部のため固定化する
+        assert_eq!(SlotState::Empty as u8, 0);
+        assert_eq!(SlotState::Writing as u8, 1);
+        assert_eq!(SlotState::Ready as u8, 2);
+        assert_eq!(SlotState::Reading as u8, 3);
+    }
+
+    #[test]
+    fn test_head_tail_advance_past_capacity() {
+        // N 件以上 push/pop しても head/tail は単調増加する（ラップしない）
+        let ring: RingBuffer<u64, 4> = RingBuffer::new();
+        for i in 0..12u64 {
+            ring.try_push(i).unwrap();
+            ring.try_pop().unwrap();
+        }
+        assert_eq!(ring.head_position(), 12);
+        assert_eq!(ring.tail_position(), 12);
+        assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn test_ring_interleaved_push_pop() {
+        // push と pop を交互に行い、スロットシーケンシングを検証する
+        let ring: RingBuffer<u64, 8> = RingBuffer::new();
+        for i in 0..32u64 {
+            ring.try_push(i).unwrap();
+            assert_eq!(ring.try_pop(), Some(i));
+        }
+        assert!(ring.is_empty());
     }
 }

@@ -70,12 +70,9 @@ impl IdempotencyBarrier {
     #[inline]
     #[must_use]
     pub fn check(&self, sender: SenderId, seq: SeqNum) -> GapResult {
-        match self.senders.get(&sender) {
-            None => {
-                // First message from this sender
-                GapResult::Accept
-            }
-            Some(state) => {
+        self.senders
+            .get(&sender)
+            .map_or(GapResult::Accept, |state| {
                 if !state.initialized {
                     GapResult::Accept
                 } else if seq <= state.last_seen {
@@ -89,8 +86,7 @@ impl IdempotencyBarrier {
                         missing_end: seq,
                     }
                 }
-            }
-        }
+            })
     }
 
     /// Mark a message as processed
@@ -195,7 +191,7 @@ impl BatchBarrier {
 
     /// Get inner barrier reference
     #[must_use]
-    pub fn inner(&self) -> &IdempotencyBarrier {
+    pub const fn inner(&self) -> &IdempotencyBarrier {
         &self.barrier
     }
 }

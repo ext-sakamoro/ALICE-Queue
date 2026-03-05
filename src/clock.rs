@@ -46,7 +46,7 @@ impl VectorClock {
 
     /// Increment local clock (on send or local event)
     #[inline]
-    pub fn tick(&mut self) -> u64 {
+    pub const fn tick(&mut self) -> u64 {
         self.clocks[self.node_id as usize] += 1;
         self.clocks[self.node_id as usize]
     }
@@ -54,14 +54,14 @@ impl VectorClock {
     /// Get current local time
     #[inline]
     #[must_use]
-    pub fn local_time(&self) -> u64 {
+    pub const fn local_time(&self) -> u64 {
         self.clocks[self.node_id as usize]
     }
 
     /// Get time for a specific node
     #[inline]
     #[must_use]
-    pub fn time_for(&self, node_id: u8) -> u64 {
+    pub const fn time_for(&self, node_id: u8) -> u64 {
         self.clocks[node_id as usize]
     }
 
@@ -69,7 +69,7 @@ impl VectorClock {
     ///
     /// `VC_merged[i] = max(VC_self[i], VC_other[i])`
     #[inline]
-    pub fn merge(&mut self, other: &VectorClock) {
+    pub fn merge(&mut self, other: &Self) {
         for i in 0..self.num_nodes as usize {
             self.clocks[i] = self.clocks[i].max(other.clocks[i]);
         }
@@ -85,7 +85,7 @@ impl VectorClock {
     /// - `Equal`: same event
     /// - `None`: concurrent (incomparable)
     #[must_use]
-    pub fn compare(&self, other: &VectorClock) -> Option<Ordering> {
+    pub fn compare(&self, other: &Self) -> Option<Ordering> {
         let mut less = false;
         let mut greater = false;
 
@@ -116,14 +116,14 @@ impl VectorClock {
     /// Check if self happened-before other
     #[inline]
     #[must_use]
-    pub fn happened_before(&self, other: &VectorClock) -> bool {
+    pub fn happened_before(&self, other: &Self) -> bool {
         matches!(self.compare(other), Some(Ordering::Less))
     }
 
     /// Check if events are concurrent
     #[inline]
     #[must_use]
-    pub fn is_concurrent_with(&self, other: &VectorClock) -> bool {
+    pub fn is_concurrent_with(&self, other: &Self) -> bool {
         self.compare(other).is_none()
     }
 
@@ -176,7 +176,7 @@ impl VectorClock {
     /// Size in bytes when serialized
     #[inline]
     #[must_use]
-    pub fn serialized_size(&self) -> usize {
+    pub const fn serialized_size(&self) -> usize {
         2 + self.num_nodes as usize * 8
     }
 }
@@ -238,7 +238,7 @@ impl HybridClock {
 
     /// Update on receive (merge with sender's clock)
     #[must_use]
-    pub fn receive(&mut self, sender: &HybridClock) -> Self {
+    pub fn receive(&mut self, sender: &Self) -> Self {
         let now = Self::current_millis();
 
         if now > self.physical && now > sender.physical {
@@ -273,7 +273,7 @@ impl HybridClock {
     /// has a statically-known length; we index directly to avoid any runtime
     /// failure path that `try_into().unwrap()` would introduce.
     #[must_use]
-    pub fn from_bytes(bytes: &[u8; 14]) -> Self {
+    pub const fn from_bytes(bytes: &[u8; 14]) -> Self {
         Self {
             physical: u64::from_le_bytes([
                 bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
@@ -512,5 +512,76 @@ mod tests {
         let bytes = hlc.to_bytes();
         let hlc2 = HybridClock::from_bytes(&bytes);
         assert_eq!(hlc, hlc2);
+    }
+
+    #[test]
+    fn test_vector_clock_compare_greater() {
+        // 自身が全成分で大きい場合は Greater を返す
+        let mut vc1 = VectorClock::new(0, 2);
+        let vc2 = VectorClock::new(0, 2);
+        vc1.tick();
+        vc1.tick();
+        assert_eq!(vc1.compare(&vc2), Some(Ordering::Greater));
+        assert!(!vc1.happened_before(&vc2));
+        assert!(!vc1.is_concurrent_with(&vc2));
+    }
+
+    #[test]
+    fn test_vector_clock_three_node_chain() {
+        // 3ノードで因果チェーン: n0 → n1 → n2
+        let mut n0 = VectorClock::new(0, 3);
+        let mut n1 = VectorClock::new(1, 3);
+        let mut n2 = VectorClock::new(2, 3);
+
+        n0.tick();
+        let snap0 = n0;
+        n1.merge(&snap0); // n1 が n0 のメッセージを受信
+        let snap1 = n1;
+        n2.merge(&snap1); // n2 が n1 のメッセージを受信
+
+        // n0 → n2 の因果関係が成立する
+        assert!(n0.happened_before(&n2));
+        assert!(n1.happened_before(&n2));
+    }
+
+    #[test]
+    fn test_vector_clock_serialization_roundtrip_with_ticks() {
+        let mut vc = VectorClock::new(3, 5);
+        for _ in 0..7 {
+            vc.tick();
+        }
+        let bytes = vc.to_bytes();
+        let restored = VectorClock::from_bytes(&bytes).unwrap();
+        assert_eq!(restored.local_time(), 7);
+        assert_eq!(restored.time_for(3), 7);
+        assert_eq!(vc.compare(&restored), Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn test_hlc_node_id_preserved_after_tick() {
+        // tick 後も node_id が変化しないことを確認する
+        let mut hlc = HybridClock::now(777);
+        for _ in 0..5 {
+            hlc.tick();
+        }
+        let bytes = hlc.to_bytes();
+        let restored = HybridClock::from_bytes(&bytes);
+        // node_id は bytes[12..14] に格納される
+        let node_id = u16::from_le_bytes([bytes[12], bytes[13]]);
+        assert_eq!(node_id, 777);
+        assert_eq!(restored, hlc);
+    }
+
+    #[test]
+    fn test_hlc_ordering_is_total() {
+        // 同一ノードの連続 tick は全順序を持つ（単調増加）
+        let mut hlc = HybridClock::now(0);
+        let mut times: Vec<HybridClock> = Vec::new();
+        for _ in 0..20 {
+            times.push(hlc.tick());
+        }
+        for w in times.windows(2) {
+            assert!(w[0] <= w[1], "HLC は単調増加でなければならない");
+        }
     }
 }
