@@ -23,20 +23,21 @@ pub struct TextPayload {
 }
 
 /// Encode text into a compact queue payload
+#[must_use]
 pub fn encode_text_payload(text: &str) -> TextPayload {
     let mut compressor = ALICEText::new(EncodingMode::Pattern);
-    match compressor.compress(text) {
-        Ok(compressed) => TextPayload {
-            original_len: text.len() as u32,
-            compressed,
-            encoding: TextEncoding::AliceText,
-        },
-        Err(_) => TextPayload {
+    compressor.compress(text).map_or_else(
+        |_| TextPayload {
             original_len: text.len() as u32,
             compressed: text.as_bytes().to_vec(),
             encoding: TextEncoding::Raw,
         },
-    }
+        |compressed| TextPayload {
+            original_len: text.len() as u32,
+            compressed,
+            encoding: TextEncoding::AliceText,
+        },
+    )
 }
 
 /// Decode a queue payload back to text
@@ -47,18 +48,19 @@ pub fn encode_text_payload(text: &str) -> TextPayload {
 pub fn decode_text_payload(payload: &TextPayload) -> Result<String, String> {
     match payload.encoding {
         TextEncoding::AliceText => {
-            let mut decompressor = ALICEText::new(EncodingMode::Pattern);
+            let decompressor = ALICEText::new(EncodingMode::Pattern);
             decompressor
                 .decompress(&payload.compressed)
-                .map_err(|e| format!("Decompress error: {}", e))
+                .map_err(|e| format!("Decompress error: {e}"))
         }
         TextEncoding::Raw => {
-            String::from_utf8(payload.compressed.clone()).map_err(|e| format!("UTF-8 error: {}", e))
+            String::from_utf8(payload.compressed.clone()).map_err(|e| format!("UTF-8 error: {e}"))
         }
     }
 }
 
-/// Serialize TextPayload to bytes for queue insertion
+/// Serialize `TextPayload` to bytes for queue insertion
+#[must_use]
 pub fn serialize_payload(payload: &TextPayload) -> Vec<u8> {
     let mut out = Vec::with_capacity(5 + payload.compressed.len());
     out.push(payload.encoding as u8);
@@ -79,7 +81,7 @@ pub fn deserialize_payload(data: &[u8]) -> Result<TextPayload, String> {
     let encoding = match data[0] {
         0 => TextEncoding::AliceText,
         1 => TextEncoding::Raw,
-        v => return Err(format!("Unknown encoding: {}", v)),
+        v => return Err(format!("Unknown encoding: {v}")),
     };
     let original_len = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
     let compressed = data[5..].to_vec();
@@ -96,8 +98,15 @@ pub struct TextLogPipeline {
     pub total_bytes_saved: u64,
 }
 
+impl Default for TextLogPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TextLogPipeline {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             buffer: Vec::new(),
             total_bytes_saved: 0,
@@ -117,7 +126,8 @@ impl TextLogPipeline {
         std::mem::take(&mut self.buffer)
     }
 
-    pub fn pending_count(&self) -> usize {
+    #[must_use]
+    pub const fn pending_count(&self) -> usize {
         self.buffer.len()
     }
 }

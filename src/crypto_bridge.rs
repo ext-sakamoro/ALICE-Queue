@@ -3,7 +3,7 @@
 //! Encrypted message queue: seal payloads with XChaCha20-Poly1305 before
 //! enqueue, unseal after dequeue. BLAKE3 integrity verification.
 
-use crate::message::{Message, SenderKey};
+use crate::message::Message;
 use alice_crypto::{hash, open, seal, Hash, Key};
 
 /// Encrypted message wrapper.
@@ -13,7 +13,8 @@ pub struct EncryptedQueue {
 
 impl EncryptedQueue {
     /// Create an encrypted queue with the given key.
-    pub fn new(key: Key) -> Self {
+    #[must_use]
+    pub const fn new(key: Key) -> Self {
         Self { key }
     }
 
@@ -52,18 +53,21 @@ impl EncryptedQueue {
     }
 
     /// Compute BLAKE3 integrity hash of a message payload.
+    #[must_use]
     pub fn payload_hash(msg: &Message) -> Hash {
         hash(&msg.payload)
     }
 
     /// Verify payload integrity against a known hash.
+    #[must_use]
     pub fn verify_integrity(msg: &Message, expected: &Hash) -> bool {
         let actual = hash(&msg.payload);
         actual.as_bytes() == expected.as_bytes()
     }
 
     /// Get a reference to the encryption key.
-    pub fn key(&self) -> &Key {
+    #[must_use]
+    pub const fn key(&self) -> &Key {
         &self.key
     }
 }

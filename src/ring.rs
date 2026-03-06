@@ -270,6 +270,174 @@ impl<'a, T, const N: usize> BatchConsumer<'a, T, N> {
     }
 }
 
+/// MPMC 対応リングバッファ。
+///
+/// CAS ループによるマルチプロデューサ・マルチコンシューマ対応。
+/// SPSC より若干オーバーヘッドが大きいが、複数スレッドから
+/// 同時に push/pop が可能。
+pub struct MpmcRing<T, const N: usize> {
+    head: PaddedAtomicU64,
+    tail: PaddedAtomicU64,
+    slots: Box<[RingSlot<T>; N]>,
+    mask: u64,
+}
+
+impl<T, const N: usize> MpmcRing<T, N> {
+    /// 新しい MPMC リングバッファを作成する。
+    ///
+    /// # Panics
+    ///
+    /// `N` が 2 のべき乗でない、または 2 未満の場合。
+    #[must_use]
+    pub fn new() -> Self {
+        assert!(N.is_power_of_two(), "Ring size must be power of 2");
+        assert!(N >= 2, "Ring size must be at least 2");
+
+        let slots: Vec<RingSlot<T>> = (0..N).map(|i| RingSlot::empty(i as u64)).collect();
+        let slots: Box<[RingSlot<T>; N]> = slots
+            .into_boxed_slice()
+            .try_into()
+            .unwrap_or_else(|_| panic!("MpmcRing: slot Vec length must equal const N"));
+
+        Self {
+            head: PaddedAtomicU64::new(0),
+            tail: PaddedAtomicU64::new(0),
+            slots,
+            mask: (N - 1) as u64,
+        }
+    }
+
+    /// CAS ループで push（複数プロデューサ安全）。
+    ///
+    /// # Errors
+    ///
+    /// バッファ満杯時に値を返す。
+    #[inline]
+    pub fn try_push(&self, value: T) -> Result<u64, T> {
+        loop {
+            let head = self.head.load(Ordering::Acquire);
+            let slot_idx = (head & self.mask) as usize;
+            let slot = &self.slots[slot_idx];
+
+            let seq = slot.sequence.load(Ordering::Acquire);
+            if seq != head {
+                // スロットが利用不可（満杯 or 別スレッドが書き込み中）
+                return Err(value);
+            }
+
+            // CAS で head を獲得
+            if self
+                .head
+                .compare_exchange(head, head + 1, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+            {
+                unsafe {
+                    *slot.data.get() = Some(value);
+                }
+                slot.sequence.store(head + 1, Ordering::Release);
+                return Ok(head);
+            }
+            // 別のプロデューサが先にヘッドを進めた → リトライ
+            core::hint::spin_loop();
+        }
+    }
+
+    /// CAS ループで pop（複数コンシューマ安全）。
+    #[inline]
+    pub fn try_pop(&self) -> Option<T> {
+        loop {
+            let tail = self.tail.load(Ordering::Acquire);
+            let slot_idx = (tail & self.mask) as usize;
+            let slot = &self.slots[slot_idx];
+
+            let seq = slot.sequence.load(Ordering::Acquire);
+            if seq != tail + 1 {
+                // スロットが未書き込み（空 or 書き込み中）
+                return None;
+            }
+
+            // CAS で tail を獲得
+            if self
+                .tail
+                .compare_exchange(tail, tail + 1, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+            {
+                let value = unsafe { (*slot.data.get()).take() };
+                slot.sequence.store(tail + N as u64, Ordering::Release);
+                return value;
+            }
+            // 別のコンシューマが先に tail を進めた → リトライ
+            core::hint::spin_loop();
+        }
+    }
+
+    /// 現在のアイテム数。
+    #[inline]
+    pub fn len(&self) -> usize {
+        let head = self.head.load(Ordering::Relaxed);
+        let tail = self.tail.load(Ordering::Relaxed);
+        (head - tail) as usize
+    }
+
+    /// 空かどうか。
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// 満杯かどうか。
+    #[inline]
+    pub fn is_full(&self) -> bool {
+        self.len() >= N
+    }
+
+    /// キャパシティ。
+    #[inline]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+}
+
+impl<T, const N: usize> Default for MpmcRing<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+unsafe impl<T: Send, const N: usize> Send for MpmcRing<T, N> {}
+unsafe impl<T: Send, const N: usize> Sync for MpmcRing<T, N> {}
+
+/// MPMC 対応バッチコンシューマ。
+pub struct MpmcBatchConsumer<'a, T, const N: usize> {
+    ring: &'a MpmcRing<T, N>,
+    batch_size: usize,
+}
+
+impl<'a, T, const N: usize> MpmcBatchConsumer<'a, T, N> {
+    pub const fn new(ring: &'a MpmcRing<T, N>, batch_size: usize) -> Self {
+        Self { ring, batch_size }
+    }
+
+    /// 最大 `batch_size` 件を一括消費する。
+    pub fn consume_batch(&self, buffer: &mut Vec<T>) {
+        buffer.clear();
+        for _ in 0..self.batch_size {
+            match self.ring.try_pop() {
+                Some(item) => buffer.push(item),
+                None => break,
+            }
+        }
+    }
+
+    /// キュー内の全アイテムを消費する。
+    pub fn consume_all(&self, buffer: &mut Vec<T>) {
+        buffer.clear();
+        while let Some(item) = self.ring.try_pop() {
+            buffer.push(item);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -589,5 +757,189 @@ mod tests {
             assert_eq!(ring.try_pop(), Some(i));
         }
         assert!(ring.is_empty());
+    }
+
+    // ================================================================
+    // MPMC リングバッファ テスト
+    // ================================================================
+
+    #[test]
+    fn test_mpmc_basic() {
+        let ring: MpmcRing<u64, 8> = MpmcRing::new();
+        assert!(ring.is_empty());
+        assert_eq!(ring.capacity(), 8);
+
+        ring.try_push(1).unwrap();
+        ring.try_push(2).unwrap();
+        ring.try_push(3).unwrap();
+        assert_eq!(ring.len(), 3);
+
+        assert_eq!(ring.try_pop(), Some(1));
+        assert_eq!(ring.try_pop(), Some(2));
+        assert_eq!(ring.try_pop(), Some(3));
+        assert_eq!(ring.try_pop(), None);
+        assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn test_mpmc_full() {
+        let ring: MpmcRing<u64, 4> = MpmcRing::new();
+        ring.try_push(1).unwrap();
+        ring.try_push(2).unwrap();
+        ring.try_push(3).unwrap();
+        ring.try_push(4).unwrap();
+        assert!(ring.is_full());
+        assert!(ring.try_push(5).is_err());
+
+        ring.try_pop();
+        assert!(!ring.is_full());
+        ring.try_push(5).unwrap();
+    }
+
+    #[test]
+    fn test_mpmc_wraparound() {
+        let ring: MpmcRing<u64, 4> = MpmcRing::new();
+        for round in 0..10u64 {
+            for i in 0..4 {
+                ring.try_push(round * 4 + i).unwrap();
+            }
+            for i in 0..4 {
+                assert_eq!(ring.try_pop(), Some(round * 4 + i));
+            }
+        }
+    }
+
+    #[test]
+    fn test_mpmc_concurrent_spsc() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let ring = Arc::new(MpmcRing::<u64, 1024>::new());
+        let r1 = Arc::clone(&ring);
+        let r2 = Arc::clone(&ring);
+
+        let producer = thread::spawn(move || {
+            for i in 0..10000u64 {
+                while r1.try_push(i).is_err() {
+                    std::hint::spin_loop();
+                }
+            }
+        });
+
+        let consumer = thread::spawn(move || {
+            let mut count = 0u64;
+            let mut last = None;
+            while count < 10000 {
+                if let Some(val) = r2.try_pop() {
+                    if let Some(prev) = last {
+                        assert_eq!(val, prev + 1, "Out of order!");
+                    }
+                    last = Some(val);
+                    count += 1;
+                } else {
+                    std::hint::spin_loop();
+                }
+            }
+        });
+
+        producer.join().unwrap();
+        consumer.join().unwrap();
+    }
+
+    #[test]
+    fn test_mpmc_concurrent_multi_producer() {
+        use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+        use std::sync::Arc;
+        use std::thread;
+
+        let ring = Arc::new(MpmcRing::<u64, 1024>::new());
+        let total = Arc::new(AtomicU64::new(0));
+        let num_producers = 4;
+        let items_per_producer = 500u64;
+        let expected_total = num_producers as u64 * items_per_producer;
+
+        // コンシューマを先に起動
+        let t = Arc::clone(&total);
+        let r = Arc::clone(&ring);
+        let consumer = thread::spawn(move || {
+            while t.load(AtomicOrdering::Acquire) < expected_total {
+                if r.try_pop().is_some() {
+                    t.fetch_add(1, AtomicOrdering::Release);
+                } else {
+                    std::hint::spin_loop();
+                }
+            }
+        });
+
+        // プロデューサを起動
+        let mut handles = Vec::new();
+        for _ in 0..num_producers {
+            let r = Arc::clone(&ring);
+            handles.push(thread::spawn(move || {
+                for i in 0..items_per_producer {
+                    while r.try_push(i).is_err() {
+                        std::hint::spin_loop();
+                    }
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+        consumer.join().unwrap();
+
+        assert_eq!(total.load(AtomicOrdering::Relaxed), expected_total);
+    }
+
+    #[test]
+    fn test_mpmc_default_trait() {
+        let ring: MpmcRing<u64, 4> = MpmcRing::default();
+        assert!(ring.is_empty());
+        assert_eq!(ring.capacity(), 4);
+    }
+
+    #[test]
+    fn test_mpmc_batch_consumer() {
+        let ring: MpmcRing<u64, 16> = MpmcRing::new();
+        for i in 0..10 {
+            ring.try_push(i).unwrap();
+        }
+
+        let consumer = MpmcBatchConsumer::new(&ring, 4);
+        let mut batch = Vec::new();
+
+        consumer.consume_batch(&mut batch);
+        assert_eq!(batch.len(), 4);
+
+        consumer.consume_batch(&mut batch);
+        assert_eq!(batch.len(), 4);
+
+        consumer.consume_batch(&mut batch);
+        assert_eq!(batch.len(), 2);
+
+        consumer.consume_batch(&mut batch);
+        assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn test_mpmc_batch_consume_all() {
+        let ring: MpmcRing<u64, 16> = MpmcRing::new();
+        for i in 0..7 {
+            ring.try_push(i).unwrap();
+        }
+
+        let consumer = MpmcBatchConsumer::new(&ring, 4);
+        let mut batch = Vec::new();
+
+        consumer.consume_all(&mut batch);
+        assert_eq!(batch.len(), 7);
+        assert!(ring.is_empty());
+    }
+
+    #[test]
+    fn test_mpmc_pop_empty() {
+        let ring: MpmcRing<u64, 4> = MpmcRing::new();
+        assert_eq!(ring.try_pop(), None);
     }
 }

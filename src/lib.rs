@@ -83,6 +83,11 @@ pub mod journal;
 pub mod message;
 pub mod ring;
 
+#[cfg(feature = "std")]
+pub mod recovery;
+#[cfg(feature = "std")]
+pub mod replay;
+
 #[cfg(feature = "crypto")]
 pub mod crypto_bridge;
 
@@ -93,10 +98,15 @@ pub mod text_bridge;
 pub use barrier::{BatchBarrier, GapResult, IdempotencyBarrier, SenderId, SeqNum};
 pub use clock::{HybridClock, VectorClock, MAX_NODES};
 pub use message::{flags, Message, MessageBuilder, MessageHeader, MessageId, SenderKey};
-pub use ring::{BatchConsumer, PaddedAtomicU64, RingBuffer, RingSlot};
+pub use ring::{BatchConsumer, MpmcBatchConsumer, MpmcRing, PaddedAtomicU64, RingBuffer, RingSlot};
 
 #[cfg(feature = "std")]
 pub use journal::{Journal, JournalIter};
+
+#[cfg(feature = "std")]
+pub use recovery::{recover, validate_journal, RecoveryResult, ValidationResult};
+#[cfg(feature = "std")]
+pub use replay::{replay_journal, replay_to_vec, ReplayStats};
 
 /// Version
 pub const VERSION: &str = "0.1.0-optimized";

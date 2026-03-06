@@ -317,6 +317,16 @@ impl Journal {
     pub fn available(&self) -> u64 {
         self.capacity - self.write_pos.load(Ordering::Relaxed)
     }
+
+    /// Write position と entry count をリセットする（リカバリ用）。
+    ///
+    /// 破損エントリ以降を論理的に切り詰めるために使用。
+    /// mmap 上のヘッダも同時に更新する。
+    pub fn reset_position(&mut self, write_pos: u64, entry_count: u64) {
+        self.write_pos.store(write_pos, Ordering::Release);
+        self.entry_count.store(entry_count, Ordering::Release);
+        self.update_header();
+    }
 }
 
 /// Iterator over journal entries
@@ -589,6 +599,37 @@ mod tests {
         let checksum = crc32(b"hello world");
         // The standard CRC-32 value for "hello world" is 0x0D4A1185
         assert_eq!(checksum, 0x0D4A1185);
+    }
+
+    #[test]
+    fn test_journal_reset_position() {
+        let path = temp_path("reset_pos");
+        let _ = fs::remove_file(&path);
+
+        {
+            let mut journal = Journal::open(&path, 1024 * 1024).unwrap();
+            journal.append(b"entry1").unwrap();
+            journal.append(b"entry2").unwrap();
+            journal.append(b"entry3").unwrap();
+            assert_eq!(journal.entry_count(), 3);
+
+            // 最初のエントリのみ残すようにリセット
+            let first_end = JOURNAL_HEADER_SIZE as u64 + HEADER_SIZE as u64 + 6; // "entry1" = 6 bytes
+            journal.reset_position(first_end, 1);
+            assert_eq!(journal.entry_count(), 1);
+            assert_eq!(journal.write_position(), first_end);
+
+            // イテレートすると 1 件だけ
+            let entries: Vec<_> = journal
+                .iter()
+                .map(|r| r.map(|(_, data)| data))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0], b"entry1");
+        }
+
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
