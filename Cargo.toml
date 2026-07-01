@@ -1,6 +1,6 @@
 [package]
 name = "alice-queue"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Moroya Sakamoto <sakamoro@alicelaw.net>"]
 description = "Deterministic Zero-Copy Message Log - Optimized Edition"
@@ -27,6 +27,7 @@ memmap2 = "0.9"
 blake3 = "1.5"
 alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
 alice-text = { path = "../ALICE-Text", optional = true, default-features = false }
+alice-blockchain = { path = "../ALICE-Blockchain" }
 
 [profile.bench]
 opt-level = 3

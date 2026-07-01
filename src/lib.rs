@@ -82,6 +82,9 @@ pub mod clock;
 pub mod journal;
 pub mod message;
 pub mod ring;
+pub mod signed_envelope;
+
+pub use signed_envelope::{DedupBuffer, Envelope, SignedEnvelope};
 
 #[cfg(feature = "std")]
 pub mod recovery;
