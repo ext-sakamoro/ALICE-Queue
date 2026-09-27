@@ -283,10 +283,19 @@ consumer.drain();
 
 ## License
 
-**GNU AGPLv3** (Affero General Public License v3.0)
+`AGPL-3.0 OR LicenseRef-Commercial` — dual-licensed. Pick either.
 
-Commercial licensing is available for enterprise use cases.
-**For commercial inquiries, please contact: https://extoria.co.jp/en**
+| Option | Terms | Use it when |
+|--------|-------|-------------|
+| **AGPL-3.0** | [LICENSE-AGPL](LICENSE-AGPL) — free, no reporting obligation | Your project is itself AGPL-compatible open source, or you are only using it internally |
+| **Commercial License** | [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) — paid, removes the copyleft | Closed-source product, proprietary SaaS, edge / firmware distribution, plugin redistribution, or a platform NDA that forbids source disclosure |
+
+AGPL is a strong copyleft: a product, firmware image, or service that links
+`alice-queue` and is distributed or served to users must be released under the AGPL
+as well. That is intentional for the open ecosystem, and the Commercial
+License exists for the cases where it is not something you are able to do.
+
+Commercial licence enquiries: <contact@extoria.co.jp>
 
 ## Author
 
