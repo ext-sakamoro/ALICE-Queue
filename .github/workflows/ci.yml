@@ -22,7 +22,7 @@ jobs:
       # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
       # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
       - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
       - name: Clone ALICE-Blockchain (real sibling)
@@ -60,7 +60,7 @@ jobs:
       # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
       # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
       - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
       - name: Clone ALICE-Blockchain (real sibling)
@@ -99,7 +99,7 @@ jobs:
       # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
       # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
       - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
       - name: Clone ALICE-Blockchain (real sibling)
@@ -148,7 +148,7 @@ jobs:
       # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
       # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
       - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
       - name: Clone ALICE-Blockchain (real sibling)
