@@ -15,18 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # alice-blockchain は **実 clone** する (stub にしない)
-      # src が signature::{KeyPair, PublicKey, Signature} を無条件に使い、
-      # tampered_*_breaks_verify 系の test が実 Ed25519 の検証に依存している
-      # fake を置くと「暗号的に無効な test double」で CI が緑になる
-      # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
-      # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
-      - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
-      - name: Clone ALICE-Blockchain (real sibling)
-        run: git clone --depth 1 git@github.com:ext-sakamoro/ALICE-Blockchain.git ../ALICE-Blockchain
       - name: Create dependency stubs
         run: |
           for crate_info in \
@@ -53,18 +41,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # alice-blockchain は **実 clone** する (stub にしない)
-      # src が signature::{KeyPair, PublicKey, Signature} を無条件に使い、
-      # tampered_*_breaks_verify 系の test が実 Ed25519 の検証に依存している
-      # fake を置くと「暗号的に無効な test double」で CI が緑になる
-      # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
-      # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
-      - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
-      - name: Clone ALICE-Blockchain (real sibling)
-        run: git clone --depth 1 git@github.com:ext-sakamoro/ALICE-Blockchain.git ../ALICE-Blockchain
       - name: Create dependency stubs
         run: |
           for crate_info in \
@@ -92,18 +68,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # alice-blockchain は **実 clone** する (stub にしない)
-      # src が signature::{KeyPair, PublicKey, Signature} を無条件に使い、
-      # tampered_*_breaks_verify 系の test が実 Ed25519 の検証に依存している
-      # fake を置くと「暗号的に無効な test double」で CI が緑になる
-      # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
-      # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
-      - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
-      - name: Clone ALICE-Blockchain (real sibling)
-        run: git clone --depth 1 git@github.com:ext-sakamoro/ALICE-Blockchain.git ../ALICE-Blockchain
       - name: Create dependency stubs
         run: |
           for crate_info in \
@@ -141,18 +105,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # alice-blockchain は **実 clone** する (stub にしない)
-      # src が signature::{KeyPair, PublicKey, Signature} を無条件に使い、
-      # tampered_*_breaks_verify 系の test が実 Ed25519 の検証に依存している
-      # fake を置くと「暗号的に無効な test double」で CI が緑になる
-      # (canonical 罠 #21、ALICE-Audit が 2026-09-15 に rich stub を廃止したのと同じ判断)
-      # ALICE-Blockchain は private repo なので read-only deploy key で SSH clone する
-      - name: Setup SSH for ALICE-Blockchain (private sibling)
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.ALICE_BLOCKCHAIN_DEPLOY_KEY }}
-      - name: Clone ALICE-Blockchain (real sibling)
-        run: git clone --depth 1 git@github.com:ext-sakamoro/ALICE-Blockchain.git ../ALICE-Blockchain
       - name: Create dependency stubs
         run: |
           for crate_info in \

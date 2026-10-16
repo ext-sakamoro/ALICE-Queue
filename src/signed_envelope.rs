@@ -17,13 +17,13 @@
 //! # Regulatory alignment
 //!
 //! - **`MiFID-II RTS 25` Art. 4** — clock-synchronized message audit
-//!   trail; combined with `alice-blockchain::timestamp` RFC 3161 tokens,
+//!   trail; combined with RFC 3161 timestamp tokens,
 //!   satisfies the 1 µs granularity requirement.
 //! - **`ISO 20022`** — payment message flows require producer attestation.
 //! - **`SOC2 CC7.4`** — the entity monitors changes; every ingest event
 //!   is attributable to the signing producer.
 //!
-//! Cryptographic primitives are provided by `alice-blockchain` (`Ed25519`).
+//! Cryptographic primitives are provided by `alice-sign` (`Ed25519`).
 
 #![allow(
     clippy::doc_markdown,
@@ -31,7 +31,7 @@
     clippy::cast_possible_wrap
 )]
 
-use alice_blockchain::signature::{KeyPair, PublicKey, Signature};
+use alice_sign::signature::{KeyPair, PublicKey, Signature};
 
 // ---------------------------------------------------------------------------
 // Envelope
