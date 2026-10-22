@@ -27,7 +27,7 @@ memmap2 = "0.9"
 blake3 = "1.5"
 alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
 alice-text = { path = "../ALICE-Text", optional = true, default-features = false }
-alice-sign = { version = "0.1", git = "https://github.com/ext-sakamoro/ALICE-Sign", rev = "b2c80d06a17d67e100c3d220d68f4ad003e6ea5a" }
+alice-sign = { version = "0.1", git = "https://github.com/ext-sakamoro/ALICE-Sign", rev = "6b79a0bad3db4c7de1719251d6a2a9405fbc0ee2" }
 
 [profile.bench]
 opt-level = 3
