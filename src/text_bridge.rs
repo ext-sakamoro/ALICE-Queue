@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_roundtrip() {
-        let text = "2026-02-11 ERROR: Connection refused to 10.0.0.1:8080";
+        let text = "2026-02-11 ERROR: Connection refused to 198.51.100.1:8080";
         let payload = encode_text_payload(text);
         assert!(payload.original_len > 0);
         let decoded = decode_text_payload(&payload).unwrap();
