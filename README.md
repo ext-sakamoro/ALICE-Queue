@@ -283,11 +283,11 @@ consumer.drain();
 
 ## License
 
-`AGPL-3.0 OR LicenseRef-Commercial` — dual-licensed. Pick either.
+`AGPL-3.0-only OR LicenseRef-Commercial` — dual-licensed. Pick either.
 
 | Option | Terms | Use it when |
 |--------|-------|-------------|
-| **AGPL-3.0** | [LICENSE-AGPL](LICENSE-AGPL) — free, no reporting obligation | Your project is itself AGPL-compatible open source, or you are only using it internally |
+| **AGPL-3.0-only** | [LICENSE-AGPL](LICENSE-AGPL) — free, no reporting obligation | Your project is itself AGPL-compatible open source, or you are only using it internally |
 | **Commercial License** | [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) — paid, removes the copyleft | Closed-source product, proprietary SaaS, edge / firmware distribution, plugin redistribution, or a platform NDA that forbids source disclosure |
 
 AGPL is a strong copyleft: a product, firmware image, or service that links

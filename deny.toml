@@ -40,11 +40,11 @@ allow = [
     "MPL-2.0",
 ]
 
-# alice-queue itself and the alice-crypto sibling are offered as AGPL-3.0 OR
-# LicenseRef-Commercial; this crate is published under the AGPL side
+# alice-queue (AGPL-3.0-only) and the alice-crypto sibling (AGPL-3.0-or-later) are each
+# offered OR LicenseRef-Commercial; this crate is published under the AGPL side
 [[licenses.exceptions]]
 name = "alice-queue"
-allow = ["AGPL-3.0"]
+allow = ["AGPL-3.0-only"]
 
 [[licenses.exceptions]]
 name = "alice-crypto"
