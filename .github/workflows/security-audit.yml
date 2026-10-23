@@ -1,0 +1,110 @@
+name: Security audit
+
+# RustSec advisories (cargo audit) and licence / advisory / ban / source policy (cargo deny),
+# on a fresh resolve against the real siblings pinned in .github/alice-siblings (never stubs),
+# so an advisory against any crate in the graph, one that comes in through a sibling included,
+# turns this red without a change here.
+
+on:
+  # every event is looked at; the `changes` job decides whether the scans run (a path filter
+  # sees nothing on the first event of a new ci/ branch, so the diff is taken against the merge
+  # base with main there)
+  push:
+    branches: [main, "ci/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    # weekly on a fresh resolve; Friday 02:53 UTC (each ALICE repo has its own slot)
+    - cron: "53 2 * * 5"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: "5"
+
+jobs:
+  changes:
+    name: changed paths
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      deps: ${{ steps.diff.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" = refs/heads/main ] && [ -n "${BEFORE}" ] && [ "${BEFORE}" != 0000000000000000000000000000000000000000 ]; then
+            base="${BEFORE}"
+          else
+            git fetch -q origin main
+            base="$(git merge-base origin/main HEAD)"
+          fi
+          files="$(git diff --name-only "${base}" HEAD)"
+          echo "base ${base}"; printf '%s\n' "${files}"
+          deps=false
+          if printf '%s\n' "${files}" | grep -Eq '^(Cargo\.toml|Cargo\.lock|deny\.toml|\.github/workflows/security-audit\.yml|\.github/alice-siblings|\.github/actions/alice-siblings/|scripts/(test_)?(sibling_coverage_guard|advisory_hold_guard)\.py|scripts/advisory_holds\.toml|\.cargo/audit\.toml)'; then deps=true; fi
+          echo "deps=${deps}" >> "${GITHUB_OUTPUT}"
+
+  audit:
+    name: cargo audit (RustSec)
+    needs: changes
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out the pinned ALICE-* siblings
+        uses: ./.github/actions/alice-siblings
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      # fresh resolve (no Cargo.lock is committed); the guard (its tests first) checks that the
+      # resolve holds this crate and every path sibling, else the scan would compare nothing
+      - name: Resolve
+        run: |
+          set -euo pipefail
+          rm -f Cargo.lock
+          cargo generate-lockfile
+          python3 scripts/test_sibling_coverage_guard.py
+          python3 scripts/sibling_coverage_guard.py --manifest Cargo.toml --lock Cargo.lock
+      - name: Run cargo audit
+        run: |
+          set -o pipefail
+          cargo audit --deny yanked 2>&1 | tee audit.log
+          n=$(grep -oE 'vulnerabilities \([0-9]+ crate dependencies\)' audit.log | grep -oE '[0-9]+' | head -1)
+          [ "${n:-0}" -gt 0 ] || { echo "::error::cargo audit scanned ${n:-0} crates"; exit 1; }
+          echo "cargo audit scanned ${n} crates"
+
+  deny:
+    name: cargo deny (advisories, licences, bans, sources)
+    needs: changes
+    if: always() && (needs.changes.result == 'skipped' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out the pinned ALICE-* siblings
+        uses: ./.github/actions/alice-siblings
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+      # fresh resolve; the dated holds stay exact (the hold guard), and cargo deny's crate graph
+      # must hold this crate and every path sibling and be no larger than the resolve
+      - name: Run cargo deny check all
+        run: |
+          set -euo pipefail
+          rm -f Cargo.lock
+          cargo generate-lockfile
+          python3 scripts/test_advisory_hold_guard.py
+          python3 scripts/advisory_hold_guard.py
+          python3 scripts/test_sibling_coverage_guard.py
+          cargo deny --all-features list --format json --layout crate > deny-graph.json
+          python3 scripts/sibling_coverage_guard.py --manifest Cargo.toml --lock Cargo.lock --graph deny-graph.json
+          cargo deny --all-features check all

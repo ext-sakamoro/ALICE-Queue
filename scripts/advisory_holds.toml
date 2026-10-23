@@ -1,0 +1,34 @@
+# Dated holds on RustSec advisories that cannot be fixed without a dependency
+# upgrade. Each hold names the advisory, the crate version it applies to and the
+# packages that depend on that version, and ends on `expires`.
+#
+# The advisory id is ignored in deny.toml (and, for vulnerabilities, in
+# .cargo/audit.toml, which cargo audit reads). scripts/advisory_hold_guard.py keeps
+# every ignore exact: it fails when the held version leaves Cargo.lock, when the
+# version gains or loses a dependent, when another version of the crate is
+# affected, when the hold has expired, or when the ignore lists and the holds
+# disagree. Every other advisory still fails the cargo deny / cargo audit steps.
+#
+# kind: "vulnerability" (ignored in deny.toml and .cargo/audit.toml) or
+#       "unmaintained" (deny.toml only; cargo audit reports it as a warning)
+# dependents: the packages that depend on the held version directly. Only direct
+#        dependents are compared: a new consumer of a recorded dependent reaches the
+#        held version through the same code and passes.
+# fixed: the advisory's patched ranges, copied as published (comma-separated
+#        comparators, semver precedence). Other versions of the crate in Cargo.lock
+#        must match one of them; a pre-release matches only a range that names a
+#        pre-release of the same release. Empty when no version is safe: then every
+#        version in Cargo.lock must be held.
+
+# bincode is unmaintained (no safe version). It comes from alice-text (the text feature,
+# through the pinned siblings); the hold ends when alice-text moves to an ALICE codec. It
+# ends on 2026-11-14; a renewal needs a new date and the reason it is still open.
+[[hold]]
+id = "RUSTSEC-2025-0141"
+kind = "unmaintained"
+crate = "bincode"
+version = "1.3.3"
+dependents = ["alice-text 2.0.0"]
+fixed = []
+expires = "2026-11-14"
+until = "alice-text replaces bincode"
