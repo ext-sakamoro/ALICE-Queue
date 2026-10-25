@@ -43,7 +43,7 @@ allow = [
 # alice-queue is LicenseRef-Proprietary; the optional alice-crypto sibling (feature crypto) keeps its own licence
 [[licenses.exceptions]]
 name = "alice-queue"
-allow = ["AGPL-3.0-only"]
+allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-crypto"
