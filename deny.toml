@@ -40,8 +40,7 @@ allow = [
     "MPL-2.0",
 ]
 
-# alice-queue (AGPL-3.0-only) and the alice-crypto sibling (AGPL-3.0-or-later) are each
-# offered OR LicenseRef-Commercial; this crate is published under the AGPL side
+# alice-queue is LicenseRef-Proprietary; the optional alice-crypto sibling (feature crypto) keeps its own licence
 [[licenses.exceptions]]
 name = "alice-queue"
 allow = ["AGPL-3.0-only"]
