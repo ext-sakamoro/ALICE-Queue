@@ -47,7 +47,7 @@ allow = ["LicenseRef-Proprietary"]
 
 [[licenses.exceptions]]
 name = "alice-crypto"
-allow = ["AGPL-3.0-or-later"]
+allow = ["LicenseRef-Proprietary"]
 
 [bans]
 multiple-versions = "warn"

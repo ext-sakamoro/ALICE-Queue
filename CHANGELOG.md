@@ -11,6 +11,7 @@ All notable changes to ALICE-Queue will be documented in this file.
 
 ### Changed
 - Licence: `AGPL-3.0` → `LicenseRef-Proprietary`
+- 依存: sibling の ALICE-Crypto を `4ab0f0e` に (deny の例外は `LicenseRef-Proprietary`)
 - `alice-sign` の git rev を 8a1b00d に上げた (HMAC-SHA256 の追加のみ、使っている API と byte 列は同じ)
 - Ed25519 の署名・検証を `alice-sign` (MIT OR Apache-2.0、公開) から取るようにした 鍵・署名の byte 列は同じ CI は非公開の依存を取得しなくなった
 
