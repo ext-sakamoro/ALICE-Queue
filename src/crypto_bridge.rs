@@ -75,6 +75,7 @@ impl EncryptedQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::SenderKey;
 
     fn test_sender() -> SenderKey {
         let mut key = [0u8; 32];
