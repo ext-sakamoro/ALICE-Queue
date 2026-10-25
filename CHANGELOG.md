@@ -9,7 +9,7 @@ All notable changes to ALICE-Queue will be documented in this file.
 - bincode 1.3.3 (RUSTSEC-2025-0141、unmaintained、alice-text 経由) は `scripts/advisory_holds.toml` の期限付きの保留 (2026-11-14 まで) とし、`scripts/advisory_hold_guard.py` が版と依存元の一致と期限を検査する それ以外の勧告は保留せず失敗する
 
 ### Changed
-- Licence: `AGPL-3.0-only OR LicenseRef-Commercial` → `LicenseRef-Proprietary`
+- Licence: `AGPL-3.0` → `LicenseRef-Proprietary`
 - `alice-sign` の git rev を 8a1b00d に上げた (HMAC-SHA256 の追加のみ、使っている API と byte 列は同じ)
 - Ed25519 の署名・検証を `alice-sign` (MIT OR Apache-2.0、公開) から取るようにした 鍵・署名の byte 列は同じ CI は非公開の依存を取得しなくなった
 
