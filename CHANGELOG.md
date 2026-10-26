@@ -10,6 +10,7 @@ All notable changes to ALICE-Queue will be documented in this file.
 - `deny.toml`: alice-queue と alice-crypto を crate 単位の exception で許可、alice-crypto が固定 commit で取る ALICE-Sign の git source を許可
 
 ### Changed
+- CI: `.github/actions/alice-siblings/action.yml` を共有の版 (ALICE-Analytics の main と同じ bytes) に揃える `.github/alice-siblings-private` に載せた非公開の隣を読み取り専用の鍵で clone できるようになった (この repository の隣はすべて公開なので、clone の仕方は変わらない)
 - Licence: `AGPL-3.0` → `LicenseRef-Proprietary`
 - 依存: sibling の ALICE-Crypto を `4ab0f0e` に (deny の例外は `LicenseRef-Proprietary`)
 - `alice-sign` の git rev を 8a1b00d に上げた (HMAC-SHA256 の追加のみ、使っている API と byte 列は同じ)
