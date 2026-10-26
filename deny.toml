@@ -54,11 +54,6 @@ allow = ["LicenseRef-Proprietary"]
 name = "alice-text"
 allow = ["LicenseRef-Proprietary"]
 
-# alice-text takes alice-zip by git (its law-id hasher); alice-zip is LicenseRef-Proprietary
-[[licenses.exceptions]]
-name = "alice-zip"
-allow = ["LicenseRef-Proprietary"]
-
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"   # path dependencies have no registry version
