@@ -5,6 +5,7 @@ All notable changes to ALICE-Queue will be documented in this file.
 ## [Unreleased]
 
 ### Security
+- `.github/alice-siblings` の ALICE-Text を 2b4449be に上げた (zstd の要求を 0.14.3 にした版: RUSTSEC-2026-0391 / RUSTSEC-2026-0398、`text` feature で引く zstd 0.13.3 / zstd-safe 7.3.0 が `cargo deny` の advisories で拒まれていた)
 - CI: `security-audit.yml` を追加 `.github/alice-siblings` に固定した実物の sibling (Crypto / Text / Zip) と毎回新しい解決で `cargo audit` と `cargo deny --all-features check all` を走らせ、解決と deny の graph がこの crate と path の sibling を全て含むこと (0 件は失敗) を検査する 週次は金曜 02:53 UTC
 - bincode 1.3.3 (RUSTSEC-2025-0141、unmaintained、alice-text 経由) は `scripts/advisory_holds.toml` の期限付きの保留 (2026-11-14 まで) とし、`scripts/advisory_hold_guard.py` が版と依存元の一致と期限を検査する それ以外の勧告は保留せず失敗する
 - `deny.toml`: alice-queue と alice-crypto を crate 単位の exception で許可、alice-crypto が固定 commit で取る ALICE-Sign の git source を許可
