@@ -51,7 +51,7 @@ jobs:
           files="$(git diff --name-only "${base}" HEAD)"
           echo "base ${base}"; printf '%s\n' "${files}"
           deps=false
-          if printf '%s\n' "${files}" | grep -Eq '^(Cargo\.toml|Cargo\.lock|deny\.toml|\.github/workflows/security-audit\.yml|\.github/alice-siblings|\.github/actions/alice-siblings/|scripts/(test_)?(sibling_coverage_guard|advisory_hold_guard)\.py|scripts/advisory_holds\.toml|\.cargo/audit\.toml)'; then deps=true; fi
+          if grep -Eq '^(Cargo\.toml|Cargo\.lock|deny\.toml|\.github/workflows/security-audit\.yml|\.github/alice-siblings|\.github/actions/alice-siblings/|scripts/(test_)?(sibling_coverage_guard|advisory_hold_guard)\.py|scripts/advisory_holds\.toml|\.cargo/audit\.toml)' <<< "${files}"; then deps=true; fi
           echo "deps=${deps}" >> "${GITHUB_OUTPUT}"
 
   audit:
