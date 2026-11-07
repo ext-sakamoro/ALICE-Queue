@@ -13,7 +13,6 @@ publish = false
 default = ["std"]
 std = []
 crypto = ["dep:alice-crypto", "std"]  # ALICE-Crypto message encryption
-text = ["dep:alice-text", "std"]  # ALICE-Text compressed log payloads
 
 [profile.release]
 opt-level = 3
@@ -26,7 +25,6 @@ strip = true
 memmap2 = "0.9"
 blake3 = "1.5"
 alice-crypto = { path = "../ALICE-Crypto", optional = true, default-features = false, features = ["std"] }
-alice-text = { path = "../ALICE-Text", optional = true, default-features = false }
 alice-sign = { version = "0.1", git = "https://github.com/ext-sakamoro/ALICE-Sign", rev = "8a1b00d800082187a8693732a9ffb806c98814e7" }
 
 [profile.bench]

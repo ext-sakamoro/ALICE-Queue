@@ -18,8 +18,7 @@ jobs:
       - name: Create dependency stubs
         run: |
           for crate_info in \
-            "ALICE-Crypto:alice-crypto" \
-            "ALICE-Text:alice-text"; do
+            "ALICE-Crypto:alice-crypto"; do
             dir=$(echo "$crate_info" | cut -d: -f1)
             pkg=$(echo "$crate_info" | cut -d: -f2)
             mkdir -p "../$dir/src"
@@ -44,8 +43,7 @@ jobs:
       - name: Create dependency stubs
         run: |
           for crate_info in \
-            "ALICE-Crypto:alice-crypto" \
-            "ALICE-Text:alice-text"; do
+            "ALICE-Crypto:alice-crypto"; do
             dir=$(echo "$crate_info" | cut -d: -f1)
             pkg=$(echo "$crate_info" | cut -d: -f2)
             mkdir -p "../$dir/src"
@@ -71,8 +69,7 @@ jobs:
       - name: Create dependency stubs
         run: |
           for crate_info in \
-            "ALICE-Crypto:alice-crypto" \
-            "ALICE-Text:alice-text"; do
+            "ALICE-Crypto:alice-crypto"; do
             dir=$(echo "$crate_info" | cut -d: -f1)
             pkg=$(echo "$crate_info" | cut -d: -f2)
             mkdir -p "../$dir/src"
@@ -108,8 +105,7 @@ jobs:
       - name: Create dependency stubs
         run: |
           for crate_info in \
-            "ALICE-Crypto:alice-crypto" \
-            "ALICE-Text:alice-text"; do
+            "ALICE-Crypto:alice-crypto"; do
             dir=$(echo "$crate_info" | cut -d: -f1)
             pkg=$(echo "$crate_info" | cut -d: -f2)
             mkdir -p "../$dir/src"

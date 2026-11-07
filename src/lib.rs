@@ -94,9 +94,6 @@ pub mod replay;
 #[cfg(feature = "crypto")]
 pub mod crypto_bridge;
 
-#[cfg(feature = "text")]
-pub mod text_bridge;
-
 // Re-exports
 pub use barrier::{BatchBarrier, GapResult, IdempotencyBarrier, SenderId, SeqNum};
 pub use clock::{HybridClock, VectorClock, MAX_NODES};

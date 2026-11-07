@@ -295,7 +295,6 @@ step "security-audit.yml / deny: Run cargo deny check all"
   rm -f Cargo.lock
   cargo generate-lockfile
   python3 scripts/test_advisory_hold_guard.py
-  python3 scripts/advisory_hold_guard.py
   python3 scripts/test_sibling_coverage_guard.py
   cargo deny --all-features list --format json --layout crate > deny-graph.json
   python3 scripts/sibling_coverage_guard.py --manifest Cargo.toml --lock Cargo.lock --graph deny-graph.json

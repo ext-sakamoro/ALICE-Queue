@@ -4,6 +4,9 @@ All notable changes to ALICE-Queue will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- feature `text` と `text_bridge` module (`TextPayload` / `TextLogPipeline` / `encode_text_payload` / `decode_text_payload`) どの crate も有効にしていなかった 依存 alice-text と、それが引く bincode 1.3.3 (RUSTSEC-2025-0141) の保留と ignore も消えた
+
 ### Security
 - `scripts/advisory_hold_guard.py` (試験も、他の repo と同じ中身) を新しい版にした: 保留の期限は今日から 21 日以内、`deny.toml` は `unused-ignored-advisory = "deny"`、`cargo audit --ignore` の id は保留にあるものだけ `.github/actions/alice-siblings` も同じ版にした (`list:` の追加)
 - `.github/alice-siblings` の ALICE-Text を 2b4449be に上げた (zstd の要求を 0.14.3 にした版: RUSTSEC-2026-0391 / RUSTSEC-2026-0398、`text` feature で引く zstd 0.13.3 / zstd-safe 7.3.0 が `cargo deny` の advisories で拒まれていた)
