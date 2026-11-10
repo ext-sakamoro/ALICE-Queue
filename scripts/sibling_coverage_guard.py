@@ -4,9 +4,10 @@
 `cargo audit` and `cargo deny check` pass on an empty or partial graph, so before trusting them
 this compares:
 
-  - the fresh resolve (Cargo.lock): not empty, holds this crate and every path sibling (each
-    dependency in any table of the manifest whose `path` leaves the repository, i.e. starts with
-    `../`; its package name is read from that directory's Cargo.toml);
+  - the fresh resolve (Cargo.lock): not empty, holds this crate and every sibling: each dependency
+    in any table of the manifest whose `path` leaves the repository (starts with `../`; its package
+    name is read from that directory's Cargo.toml), and each whose `git` names an ALICE-* repository
+    (its package name is the `package` key, else the dependency's name);
   - with `--graph`, cargo deny's crate graph (`cargo deny --all-features list --format json
     --layout crate`): holds this crate and every path sibling, and is no larger than the resolve
     it came from (it keeps only the features and targets that are built, so it is smaller).
@@ -34,7 +35,10 @@ def path_siblings(manifest: pathlib.Path) -> list[str]:
             tables.append(target.get(key, {}))
     names = []
     for table in tables:
-        for spec in table.values():
+        for key, spec in table.items():
+            if isinstance(spec, dict) and "/ALICE-" in str(spec.get("git", "")):
+                names.append(spec.get("package", key))
+                continue
             if isinstance(spec, dict) and str(spec.get("path", "")).startswith("../"):
                 sib = (manifest.parent / spec["path"] / "Cargo.toml").resolve()
                 pkg = tomllib.loads(sib.read_text(encoding="utf-8")).get("package", {}).get("name")
@@ -61,7 +65,7 @@ def main(argv):
     for name in [me, *siblings]:
         if name not in resolved:
             errors.append(f"{name} is not in the resolve (Cargo.lock): the scan would not cover it")
-    report = f"sibling_coverage_guard: resolve {n_resolved} packages, {len(siblings)} path siblings ({', '.join(siblings) or 'none'})"
+    report = f"sibling_coverage_guard: resolve {n_resolved} packages, {len(siblings)} siblings ({', '.join(siblings) or 'none'})"
 
     if a.graph:
         graph = json.loads(pathlib.Path(a.graph).read_text(encoding="utf-8"))

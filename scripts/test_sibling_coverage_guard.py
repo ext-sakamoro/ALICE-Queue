@@ -2,7 +2,7 @@
 """Tests of scripts/sibling_coverage_guard.py.
 
 The guard must fail whenever the advisory scan could not have covered the real dependency graph:
-an empty resolve, this crate or one of its path siblings missing from the resolve, and (with
+an empty resolve, this crate or one of its siblings (a path one, or a git one on an ALICE-* repository) missing from the resolve, and (with
 `--graph`) a cargo deny crate graph that is empty, misses this crate or a path sibling, or is
 larger than the resolve it came from. A complete resolve and graph pass.
 """
@@ -19,7 +19,7 @@ def entry(name, version="1.0.0", src="registry+https://github.com/rust-lang/crat
     return f"{name} {version} {src}", {"licenses": ["MIT"]}
 
 
-def run(lock_names, graph=None, siblings=("alice-lol",)):
+def run(lock_names, graph=None, siblings=("alice-lol",), git_siblings=()):
     with tempfile.TemporaryDirectory() as d:
         d = pathlib.Path(d)
         me = d / "ALICE-Me"
@@ -27,7 +27,10 @@ def run(lock_names, graph=None, siblings=("alice-lol",)):
         deps = "".join(
             f'{s} = {{ path = "../ALICE-{s.split("-", 1)[1].capitalize()}/{s}", optional = true }}\n'
             for s in siblings
-        )
+        ) + "".join(
+            f'{s} = {{ git = "https://github.com/ext-sakamoro/ALICE-{s.split("-", 1)[1].capitalize()}", branch = "main", version = "1" }}\n'
+            for s in git_siblings
+        ) + 'renamed = { git = "https://github.com/ext-sakamoro/ALICE-Text", branch = "main", package = "alice-text" }\n' * bool(git_siblings)
         (me / "Cargo.toml").write_text(
             f'[package]\nname = "alice-me"\nversion = "0.1.0"\n\n[dependencies]\n{deps}'
             'serde = { version = "1" }\n\n[dev-dependencies]\nlocal-helper = { path = "helper" }\n',
@@ -64,6 +67,10 @@ def main():
         ("a graph larger than the resolve fails", (["alice-me", "alice-lol"], graph), 1),
         ("a crate with no path sibling is still checked", (["alice-me", "serde"], None, ()), 0),
         ("no path sibling, empty resolve fails", ([], None, ()), 1),
+        ("git siblings in the resolve pass", (["alice-me", "alice-crypto", "alice-text"], None, (), ("alice-crypto",)), 0),
+        ("a git sibling missing from the resolve fails", (["alice-me", "alice-text"], None, (), ("alice-crypto",)), 1),
+        ("a renamed git sibling is read by its package name", (["alice-me", "alice-crypto", "renamed"], None, (), ("alice-crypto",)), 1),
+        ("a git sibling missing from the graph fails", (["alice-me", "alice-crypto", "alice-text"], [entry("alice-me"), entry("alice-text")], (), ("alice-crypto",)), 1),
     ]
     failures = []
     for name, args, want in cases:

@@ -1,7 +1,7 @@
 name: Security audit
 
 # RustSec advisories (cargo audit) and licence / advisory / ban / source policy (cargo deny),
-# on a fresh resolve against the real siblings pinned in .github/alice-siblings (never stubs),
+# on a fresh resolve against the real siblings (git, branch main; never stubs),
 # so an advisory against any crate in the graph, one that comes in through a sibling included,
 # turns this red without a change here.
 
@@ -51,7 +51,7 @@ jobs:
           files="$(git diff --name-only "${base}" HEAD)"
           echo "base ${base}"; printf '%s\n' "${files}"
           deps=false
-          if printf '%s\n' "${files}" | grep -Eq '^(Cargo\.toml|Cargo\.lock|deny\.toml|\.github/workflows/security-audit\.yml|\.github/alice-siblings|\.github/actions/alice-siblings/|scripts/(test_)?(sibling_coverage_guard|advisory_hold_guard)\.py|scripts/advisory_holds\.toml|\.cargo/audit\.toml)'; then deps=true; fi
+          if printf '%s\n' "${files}" | grep -Eq '^(Cargo\.toml|Cargo\.lock|deny\.toml|\.github/workflows/security-audit\.yml|scripts/(test_)?(sibling_coverage_guard|advisory_hold_guard)\.py|scripts/advisory_holds\.toml|\.cargo/audit\.toml)'; then deps=true; fi
           echo "deps=${deps}" >> "${GITHUB_OUTPUT}"
 
   audit:
@@ -62,12 +62,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check out the pinned ALICE-* siblings
-        uses: ./.github/actions/alice-siblings
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       # fresh resolve (no Cargo.lock is committed); the guard (its tests first) checks that the
-      # resolve holds this crate and every path sibling, else the scan would compare nothing
+      # resolve holds this crate and every ALICE-* sibling (path or git), else the scan would compare nothing
       - name: Resolve
         run: |
           set -euo pipefail
@@ -91,12 +89,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check out the pinned ALICE-* siblings
-        uses: ./.github/actions/alice-siblings
       - name: Install cargo-deny
         run: cargo install --locked cargo-deny
       # fresh resolve; the dated holds stay exact (the hold guard), and cargo deny's crate graph
-      # must hold this crate and every path sibling and be no larger than the resolve
+      # must hold this crate and every ALICE-* sibling and be no larger than the resolve
       - name: Run cargo deny check all
         run: |
           set -euo pipefail
