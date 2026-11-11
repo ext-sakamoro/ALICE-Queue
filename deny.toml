@@ -55,6 +55,15 @@ allow = ["LicenseRef-Proprietary"]
 name = "alice-text"
 allow = ["LicenseRef-Proprietary"]
 
+# alice-text 2.0.0 brings alice-zip and alice-det-math (both LicenseRef-Proprietary) through the git dependency
+[[licenses.exceptions]]
+name = "alice-zip"
+allow = ["LicenseRef-Proprietary"]
+
+[[licenses.exceptions]]
+name = "alice-det-math"
+allow = ["LicenseRef-Proprietary"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"   # path dependencies have no registry version
@@ -64,8 +73,11 @@ highlight = "all"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# alice-sign comes from alice-crypto, and alice-zip from alice-text, as git dependencies pinned to one commit
+# the alice-* dependencies are git (branch main, or one pinned commit for alice-sign); each repository the resolve reaches is listed
 allow-git = [
+    "https://github.com/ext-sakamoro/ALICE-Crypto",
+    "https://github.com/ext-sakamoro/ALICE-DetMath",
     "https://github.com/ext-sakamoro/ALICE-Sign",
+    "https://github.com/ext-sakamoro/ALICE-Text",
     "https://github.com/ext-sakamoro/ALICE-Zip",
 ]
