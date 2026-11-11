@@ -64,6 +64,11 @@ allow = ["LicenseRef-Proprietary"]
 name = "alice-det-math"
 allow = ["LicenseRef-Proprietary"]
 
+# alice-sign (git, branch main) is LicenseRef-Proprietary since its licence change (the old pinned rev was MIT OR Apache-2.0)
+[[licenses.exceptions]]
+name = "alice-sign"
+allow = ["LicenseRef-Proprietary"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"   # path dependencies have no registry version
