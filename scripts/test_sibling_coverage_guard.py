@@ -19,7 +19,7 @@ def entry(name, version="1.0.0", src="registry+https://github.com/rust-lang/crat
     return f"{name} {version} {src}", {"licenses": ["MIT"]}
 
 
-def run(lock_names, graph=None, siblings=("alice-lol",)):
+def run(lock_names, graph=None, siblings=("alice-lol",), git_deps=(), foreign_git=()):
     with tempfile.TemporaryDirectory() as d:
         d = pathlib.Path(d)
         me = d / "ALICE-Me"
@@ -27,6 +27,14 @@ def run(lock_names, graph=None, siblings=("alice-lol",)):
         deps = "".join(
             f'{s} = {{ path = "../ALICE-{s.split("-", 1)[1].capitalize()}/{s}", optional = true }}\n'
             for s in siblings
+        )
+        deps += "".join(
+            f'{k} = {{ version = "0.1.0", git = "https://example.invalid/ALICE-{k}", branch = "main", package = "{p}" }}\n'
+            for k, p in git_deps
+        )
+        deps += "".join(
+            f'{k} = {{ version = "0.1.0", git = "https://example.invalid/{k}", branch = "main" }}\n'
+            for k in foreign_git
         )
         (me / "Cargo.toml").write_text(
             f'[package]\nname = "alice-me"\nversion = "0.1.0"\n\n[dependencies]\n{deps}'
@@ -64,6 +72,12 @@ def main():
         ("a graph larger than the resolve fails", (["alice-me", "alice-lol"], graph), 1),
         ("a crate with no path sibling is still checked", (["alice-me", "serde"], None, ()), 0),
         ("no path sibling, empty resolve fails", ([], None, ()), 1),
+        ("a git sibling in the resolve passes", (["alice-me", "alice-sync", "serde"], None, (), (("sync", "alice-sync"),)), 0),
+        ("a git sibling missing from the resolve fails", (["alice-me", "serde"], None, (), (("sync", "alice-sync"),)), 1),
+        ("a git dependency outside ALICE is not a sibling",
+         (["alice-me", "serde"], None, (), (), ("some-tool",)), 0),
+        ("a git sibling missing from the graph fails",
+         (["alice-me", "alice-sync"], [entry("alice-me", "0.1.0", "path+file:///a")], (), (("sync", "alice-sync"),)), 1),
     ]
     failures = []
     for name, args, want in cases:
