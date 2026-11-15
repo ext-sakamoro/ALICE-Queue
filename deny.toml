@@ -17,10 +17,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 version = 2
 yanked = "deny"
 unused-ignored-advisory = "deny"
-ignore = [
-    # dated hold (scripts/advisory_holds.toml): bincode 1.3.3 unmaintained, via alice-text
-    "RUSTSEC-2025-0141",
-]
+ignore = []
 
 [licenses]
 version = 2
@@ -64,6 +61,11 @@ allow = ["LicenseRef-Proprietary"]
 name = "alice-det-math"
 allow = ["LicenseRef-Proprietary"]
 
+# alice-text 3.0.0 brings alice-serial (LicenseRef-Proprietary, git branch main), which writes its payloads
+[[licenses.exceptions]]
+name = "alice-serial"
+allow = ["LicenseRef-Proprietary"]
+
 # alice-sign (git, branch main) is LicenseRef-Proprietary since its licence change (the old pinned rev was MIT OR Apache-2.0)
 [[licenses.exceptions]]
 name = "alice-sign"
@@ -82,6 +84,7 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/ext-sakamoro/ALICE-Crypto",
     "https://github.com/ext-sakamoro/ALICE-DetMath",
+    "https://github.com/ext-sakamoro/ALICE-Serial",
     "https://github.com/ext-sakamoro/ALICE-Sign",
     "https://github.com/ext-sakamoro/ALICE-Text",
     "https://github.com/ext-sakamoro/ALICE-Zip",

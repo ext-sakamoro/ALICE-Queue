@@ -19,18 +19,3 @@
 #        must match one of them; a pre-release matches only a range that names a
 #        pre-release of the same release. Empty when no version is safe: then every
 #        version in Cargo.lock must be held.
-
-# bincode is unmaintained (no safe version). It comes from alice-text (the text feature,
-# through the pinned siblings); the hold ends when alice-text moves to an ALICE codec. It
-# ended on 2026-11-14; it runs to 2026-11-22 only as the bridge to that move: alice-text
-# 3.0.0 (28de466, built and checked) replaces bincode, and lands after this repository
-# accepts 3; the relock that takes 3 deletes this hold. No further renewal.
-[[hold]]
-id = "RUSTSEC-2025-0141"
-kind = "unmaintained"
-crate = "bincode"
-version = "1.3.3"
-dependents = ["alice-text 2.0.0"]
-fixed = []
-expires = "2026-11-22"
-until = "alice-text 3.0.0 @ 28de466 replaces bincode with alice-serial bincode1; removed by this repo's relock"

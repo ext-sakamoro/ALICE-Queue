@@ -5,6 +5,9 @@ All notable changes to ALICE-Queue will be documented in this file.
 ## [Unreleased]
 
 ### Security
+- bincode 1.3.3 (RUSTSEC-2025-0141) の保留を消し、`deny.toml` の ignore を空にした alice-text 3.0.0 は bincode を引かない (保存する payload は alice-serial の bincode1) `scripts/no_bincode_in_graph.sh` が全 feature (`text` を含む) の依存 graph に bincode が入ると落ちる (0 package も落ちる)、`security-audit.yml` の cargo deny の job で走る
+- `deny.toml`: alice-text 3.0.0 が引く alice-serial (LicenseRef-Proprietary、git branch main) を license の例外と allow-git に足した
+- `scripts/advisory_hold_guard.py` / `scripts/test_advisory_hold_guard.py` を共有の新しい版にした (保留ごとの `reason` と `until_release`、`scope = "lock-only"`、77 通り) 保留が 0 件の時は deny.toml / .cargo/audit.toml / cargo audit の行が何も無視しないことを検査する
 - `scripts/advisory_holds.toml`: bincode 1.3.3 (RUSTSEC-2025-0141) の保留の期限を 2026-11-14 から 2026-11-22 へ (延長は 1 度だけ) 置き換えの alice-text 3.0.0 (28de466、bincode を alice-serial の bincode1 に) は用意できており、この repository が 3 を受け取れるようになった後に着地する 3 へ上げる relock でこの保留を消す
 - `scripts/advisory_hold_guard.py` (試験も、他の repo と同じ中身) を新しい版にした: 保留の期限は今日から 21 日以内、`deny.toml` は `unused-ignored-advisory = "deny"`、`cargo audit --ignore` の id は保留にあるものだけ `.github/actions/alice-siblings` も同じ版にした (`list:` の追加)
 - `.github/alice-siblings` の ALICE-Text を 2b4449be に上げた (zstd の要求を 0.14.3 にした版: RUSTSEC-2026-0391 / RUSTSEC-2026-0398、`text` feature で引く zstd 0.13.3 / zstd-safe 7.3.0 が `cargo deny` の advisories で拒まれていた)
@@ -13,6 +16,7 @@ All notable changes to ALICE-Queue will be documented in this file.
 - `deny.toml`: alice-queue と alice-crypto を crate 単位の exception で許可、alice-crypto が固定 commit で取る ALICE-Sign の git source を許可
 
 ### Changed
+- 依存: alice-text の要求を `"3"` にした (3.0.0、多言語表の map は順序付き、payload の byte は同じ) `text` feature の試験 152 件が 3.0.0 で通る
 - 依存: alice-text の要求を `">=2.0.0, <4"` に広げる (ALICE-Text 3.0.0 への移行の橋、解決は 2 のまま) Text 3.0.0 は保存する payload を alice-serial の bincode1 で書き (byte は同じ)、多言語表の map を順序付きにする この crate が使う範囲は 3.0.0 で build と試験が通る (`text` feature、152 件)
 - `deny.toml`: 隣の ALICE-Text (2b4449be) が LicenseRef-Proprietary になり alice-zip を git で引くので、alice-text の license の例外 (LicenseRef-Proprietary) と allow-git の ALICE-Zip を足した (alice-zip は Text が引く rev でも隣の checkout でも Apache-2.0 で、既に allow にある) この crate も LicenseRef-Proprietary なので依存の向きは変わらない
 - CI: `.github/actions/alice-siblings/action.yml` を共有の版 (ALICE-Analytics の main と同じ bytes) に揃える `.github/alice-siblings-private` に載せた非公開の隣を読み取り専用の鍵で clone できるようになった (この repository の隣はすべて公開なので、clone の仕方は変わらない)
