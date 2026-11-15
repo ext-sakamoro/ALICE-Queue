@@ -104,3 +104,4 @@ jobs:
           cargo deny --all-features list --format json --layout crate > deny-graph.json
           python3 scripts/sibling_coverage_guard.py --manifest Cargo.toml --lock Cargo.lock --graph deny-graph.json
           cargo deny --all-features check all
+          bash scripts/no_bincode_in_graph.sh
